@@ -534,19 +534,17 @@
             return `${yyyy}-${mm}-${dd}`;
         }
 
-        // ==================== 2. 成就定義 (30項完整成就) ====================
-        const GRAIN_IDS = ['rice_porridge', 'brown_rice', 'oatmeal', 'Rice', 'Brown Rice', 'Oats', 'Corn'];
-
+        // ==================== 2. 成就定義 (28項完整成就) ====================
         const ACHIEVEMENTS_LIST = [
             { id: 'first_food', title: '初嚐一口', desc: '記錄寶寶第一次吃的副食品', icon: '🥄', condition: s => getAllRecords().length >= 1 },
             { id: 'five_kinds', title: '美食小探險', desc: '累積嘗試過 5 種不同的食材', icon: '⭐️', condition: s => getTriedCount() >= 5 },
             { id: 'ten_kinds', title: '十全十美', desc: '累積嘗試過 10 種不同的食材', icon: '🌟', condition: s => getTriedCount() >= 10 },
             { id: 'thirty_kinds', title: '味蕾小博士', desc: '累積嘗試過 30 種不同的食材', icon: '🎓', condition: s => getTriedCount() >= 30 },
             { id: 'fifty_kinds', title: '美食大富翁', desc: '累積嘗試過 50 種（含自訂）不同的食材', icon: '👑', condition: s => getTriedCount() >= 50 },
-            { id: 'full_encyclopedia', title: '資深小農夫', desc: '解鎖圖鑑全部食材（每種皆吃滿 3 次）', icon: '👩‍🌾', condition: s => getUnlockedCount() >= Object.keys(s.ingredients).length },
+            { id: 'full_encyclopedia', title: '資深小農夫', desc: '解鎖圖鑑全部食材（每種皆吃滿 3 次）', icon: '👩‍🌾', condition: s => getOfficialUnlockedCount() >= Object.keys(s.ingredients).length },
 
-            { id: 'farm_sprout', title: '農場萌芽', desc: '第一次在農田、果樹或溫室完成「播種」，並成功解鎖首張圖鑑卡', icon: '🌱', condition: s => countCategoriesUnlocked(s, ['farm', 'orchard', 'greenhouse']) >= 3 },
-            { id: 'green_elf', title: '卜派愛吃菜', desc: '在農田區解鎖「菠菜」圖鑑卡', icon: '🥗', condition: s => hasEatenFarmVeggie(s) >= 3 },
+            { id: 'farm_sprout', title: '農場萌芽', desc: '第一次在農田、果樹或溫室完成「播種」，並成功解鎖首張圖鑑卡', icon: '🌱', condition: s => countCategoriesUnlocked(s, ['farm', 'orchard', 'greenhouse']) >= 1 },
+            { id: 'green_elf', title: '卜派愛吃菜', desc: '在農田區解鎖「菠菜」圖鑑卡', icon: '🥗', condition: s => hasEatenFarmVeggie(s) },
             { id: 'fruit_sweet', title: '水果甜心', desc: '在果樹區解鎖 3 種以上的水果類食材', icon: '🍎', condition: s => countCategoryUnlocked(s, 'orchard') >= 3 },
             { id: 'meat_grow', title: '吃肉肉長肉肉', desc: '第一次食用牧場區的肉類或蛋白質食材', icon: '🥩', condition: s => hasEatenCategory(s, 'pasture') },
             { id: 'egg_happiness', title: '蛋蛋的幸福', desc: '成功解鎖牧場區的「蛋黃 / 雞蛋」圖鑑卡', icon: '🐣', condition: s => hasUnlockedEgg(s) },
@@ -572,23 +570,48 @@
         ];
 
         // ==================== 3. 輔助計算函式 ====================
-        const POPEYE_SECRET_IDS = ['spinach'];
-        const POPEYE_SECRET_NAMES = ['菠菜'];
-        function hasEatenFarmVeggie(s) {
-            const allIngs = [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
-            return allIngs.some(ing => {
-                if (ing.category !== 'farm') return false;
-                const idLower = String(ing.id || '').toLowerCase().trim();
-                const nameStr = String(ing.name || '').trim();
-                const isSecretVeggie = POPEYE_SECRET_IDS.includes(idLower) || POPEYE_SECRET_NAMES.some(v => nameStr.includes(v));
-                return isSecretVeggie && (ing.history && ing.history.length >= 1);
+        // 通用關鍵字比對工具：同時檢查 id、name（中文）、nameEn（英文）
+        function matchIngredient(ing, keywords) {
+            const idStr = String(ing.id || '').toLowerCase().trim();
+            const nameStr = String(ing.name || '').trim();
+            const nameEnStr = String(ing.nameEn || '').toLowerCase().trim();
+            return keywords.some(kw => {
+                const kwLower = kw.toLowerCase();
+                return idStr === kwLower || nameStr.includes(kw) || nameEnStr.includes(kwLower);
             });
         }
 
-        function hasUnlockedEgg(s) {
-            return Object.values(s.ingredients).some(i =>
-                (i.id === 'egg_yolk' || i.id === 'Chicken Egg' || /蛋/.test(i.name || '')) && i.history.length >= 3
+        // 檢查特定關鍵字食材是否已解鎖（吃滿 3 次）
+        function isUnlockedByKeywords(s, keywords) {
+            const allIngs = [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
+            return allIngs.some(ing => matchIngredient(ing, keywords) && ing.history && ing.history.length >= 3);
+        }
+
+        // 【卜派愛吃菜】解鎖農田區的「菠菜」（吃滿 3 次）
+        const POPEYE_SECRET_KEYWORDS = ['菠菜', 'spinach'];
+        function hasEatenFarmVeggie(s) {
+            const allIngs = [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
+            return allIngs.some(ing => 
+                ing.category === 'farm' && 
+                matchIngredient(ing, POPEYE_SECRET_KEYWORDS) && 
+                ing.history && ing.history.length >= 3
             );
+        }
+
+        // 【蛋蛋的幸福】解鎖蛋黃（或雞蛋）
+        function hasUnlockedEgg(s) {
+            return isUnlockedByKeywords(s, ['蛋黃', '雞蛋', 'egg yolk', 'egg_yolk', 'egg']);
+        }
+
+        // 計算官方圖鑑已解鎖數量（用於頂端進度條與資深小農夫成就）
+        function getOfficialUnlockedCount() {
+            return Object.values(state.ingredients || {}).filter(ing => ing.history && ing.history.length >= 3).length;
+        }
+
+        // 計算全部已解鎖食材總數（包含官方圖鑑 + 自訂食材）
+        function getUnlockedCount() {
+            const allIngs = [...Object.values(state.ingredients || {}), ...(state.customIngredients || [])];
+            return allIngs.filter(ing => ing.history && ing.history.length >= 3).length;
         }
 
         function getBabyAgeString() {
@@ -637,153 +660,13 @@
             return count;
         }
 
-        function getUnlockedCount() {
-            let count = 0;
-            Object.values(state.ingredients).forEach(ing => {
-                if (ing.history.length >= 3) count++;
-            });
-            return count;
-        }
-
         function hasEatenCategory(s, cat) {
             const official = Object.values(s.ingredients).some(i => i.category === cat && i.history.length > 0);
             const custom = s.customIngredients.some(i => i.category === cat && i.history.length > 0);
             return official || custom;
         }
 
-        function countCategoryUnlocked(s, cat) {
-            const officialCount = Object.values(s.ingredients).filter(i => i.category === cat && i.history.length >= 3).length;
-            const customCount = s.customIngredients.filter(i => i.category === cat && i.history.length >= 3).length;
-            return officialCount + customCount;
-        }
-
-        function countCategoriesUnlocked(s, cats) {
-            return cats.reduce((sum, cat) => sum + countCategoryUnlocked(s, cat), 0);
-        }
-
-        function hasCompletedThreeDayChallenge(s) {
-            const items = [...Object.values(s.ingredients), ...s.customIngredients];
-            return items.some(item => item.history.length >= 3);
-        }
-
-        function hasOvercomeAllergy(s) {
-            let items = [...Object.values(s.ingredients), ...s.customIngredients];
-            return items.some(item => {
-                let history = item.history;
-                if (history.length < 2) return false;
-                let hadAllergy = false;
-                for (let i = 0; i < history.length - 1; i++) {
-                    if (['mild', 'moderate', 'severe'].includes(history[i].reaction)) hadAllergy = true;
-                }
-                let lastReaction = history[history.length - 1].reaction;
-                return hadAllergy && lastReaction === 'none';
-            });
-        }
-
-        function getMaxConsecutiveNoAllergyStreak() {
-            const records = getAllRecords().slice().sort((a, b) => a.date.localeCompare(b.date));
-            let maxStreak = 0;
-            let currentStreak = 0;
-            records.forEach(r => {
-                if (r.reaction === 'none') {
-                    currentStreak++;
-                    if (currentStreak > maxStreak) maxStreak = currentStreak;
-                } else {
-                    currentStreak = 0;
-                }
-            });
-            return maxStreak;
-        }
-
-        function getMaxConsecutiveDays() {
-            const uniqueDates = Array.from(getUniqueRecordDates()).sort();
-            if (uniqueDates.length === 0) return 0;
-            let maxDays = 1;
-            let currentDays = 1;
-            for (let i = 1; i < uniqueDates.length; i++) {
-                const [y1, m1, d1] = uniqueDates[i - 1].split('-').map(Number);
-                const [y2, m2, d2] = uniqueDates[i].split('-').map(Number);
-                const t1 = Date.UTC(y1, m1 - 1, d1);
-                const t2 = Date.UTC(y2, m2 - 1, d2);
-                const diffDays = Math.round((t2 - t1) / (1000 * 60 * 60 * 24));
-                if (diffDays === 1) {
-                    currentDays++;
-                    if (currentDays > maxDays) maxDays = currentDays;
-                } else if (diffDays > 1) {
-                    currentDays = 1;
-                }
-            }
-            return maxDays;
-        }
-
-        function getSavedPolaroidPhotosCount(s) {
-            return Object.values(s.polaroids).filter(p => p && p.imageUrl && p.imageUrl.trim().length > 0).length;
-        }
-
-        function getUniqueRecordDates() {
-            const dates = new Set();
-            getAllRecords().forEach(r => dates.add(r.date));
-            return dates;
-        }
-
-        function getNotesCount() {
-            return getAllRecords().filter(r => r.notes && r.notes.trim().length > 0).length;
-        }
-
-        function updateHeaderInfo() {
-            document.getElementById('header-baby-age').innerText = getBabyAgeString();
-            document.getElementById('header-unlock-count').innerText = `${getUnlockedCount()}/${Object.keys(state.ingredients).length}`;
-        }
-
-        function checkAchievements() {
-            let unlockedNew = false;
-            const validAchievements = [];
-        
-            ACHIEVEMENTS_LIST.forEach(ach => {
-                const isCurrentlyMet = Boolean(ach.condition(state));
-                const wasUnlocked = state.achievements.includes(ach.id);
-        
-                if (isCurrentlyMet) {
-                    validAchievements.push(ach.id);
-                    if (!wasUnlocked) {
-                        unlockedNew = true;
-                        showToast(`🏆 恭喜解鎖成就：${ach.title}！`);
-                    }
-                }
-            });
-        
-            // 若有新增或收回成就，更新並存檔
-            if (unlockedNew || validAchievements.length !== state.achievements.length) {
-                state.achievements = validAchievements;
-                saveStateSilently();
-            }
-        }
-
-        function showToast(message) {
-            let container = document.getElementById('toast-container');
-            if (!container) {
-                container = document.createElement('div');
-                container.id = 'toast-container';
-                container.className = 'fixed top-16 right-4 z-50 flex flex-col items-end space-y-2 pointer-events-none max-w-[85vw]';
-                document.body.appendChild(container);
-            }
-
-            const toast = document.createElement('div');
-            toast.className = 'bg-cream-text text-white px-4 py-2.5 rounded-2xl border-2 border-cream-secondary shadow-xl text-xs sm:text-sm font-bold flex items-center space-x-2 pointer-events-auto transition-all duration-300 transform translate-y-0 opacity-100';
-            toast.innerHTML = `<span>${message}</span>`;
-            container.appendChild(toast);
-
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateY(-6px)';
-                setTimeout(() => {
-                    toast.remove();
-                    if (container && container.children.length === 0) {
-                        container.remove();
-                    }
-                }, 300);
-            }, 3200);
-        }
+        function countCategoryUnlocked(s, cat)
 
         // ==================== 4. Router 導覽系統 ====================
         const router = {
@@ -1049,9 +932,13 @@
                                  onerror="this.style.display='none';"
                                  class="absolute inset-0 w-full h-full object-cover">
                         ` : ''}
-                        <button onclick="router.navigate('farm_map')" class="absolute top-3 left-3 z-10 cream-btn bg-white/90 hover:bg-white px-3 py-1.5 text-xs font-bold">🗺️ 返回地圖</button>
                     </div>
-                    <h2 class="text-base sm:text-lg font-extrabold text-cream-text">${meta.title}</h2>
+                <div class="flex items-center justify-between gap-2 px-1">
+                    <h2 class="text-base sm:text-lg font-extrabold text-cream-text text-left">${meta.title}</h2>
+                    <button onclick="router.navigate('farm_map')" class="shrink-0 cream-btn bg-white hover:bg-cream-secondary/40 px-3 py-1.5 text-xs font-bold">
+                        🗺️ 返回地圖
+                    </button>
+                </div>
                     <p class="text-xs text-cream-muted text-center bg-white/70 py-1.5 px-3 rounded-full border border-cream-border">${meta.desc}</p>
 
                     <div class="grid grid-cols-2 gap-3.5">
@@ -1879,12 +1766,12 @@
         function renderEncyclopediaView() {
             const categories = [
                 { id: 'all', label: '全部' },
+                { id: 'custom', label: '✨ 自訂' },
                 { id: 'farm', label: '🌾 農田區' },
                 { id: 'orchard', label: '🍎 果樹區' },
                 { id: 'fish', label: '🐟 魚池' },
                 { id: 'pasture', label: '🥩 牧場區' },
-                { id: 'greenhouse', label: '🍄 溫室' },
-                { id: 'custom', label: '✨ 自訂' }
+                { id: 'greenhouse', label: '🍄 溫室' }
             ];
 
             const statuses = [
@@ -1900,91 +1787,137 @@
                 ...state.customIngredients.map(i => ({ ...i, isCustom: true }))
             ];
 
-            const filtered = allItems.filter(item => {
-                if (encFilterCat !== 'all') {
-                    if (encFilterCat === 'custom' && !item.isCustom) return false;
-                    if (encFilterCat !== 'custom' && item.category !== encFilterCat) return false;
+            let filtered = allItems.filter(item => {
+                // 1. 農場分區 / 自訂篩選
+                if (encFilterCat === 'custom') {
+                    if (!item.isCustom) return false;
+                } else if (encFilterCat !== 'all' && item.category !== encFilterCat) {
+                    return false;
                 }
-                const count = item.history.length;
-                if (encFilterStatus === 'tried' && count === 0) return false;
-                if (encFilterStatus === 'untried' && count > 0) return false;
-                if (encFilterStatus === 'allergic') {
-                    if (count === 0) return false;
-                    const latest = item.history[count - 1].reaction;
-                    if (!['mild', 'moderate', 'severe'].includes(latest)) return false;
-                }
-                if (encFilterStatus === 'no_allergy') {
-                    if (count === 0) return false;
-                    const latest = item.history[count - 1].reaction;
-                    if (latest !== 'none') return false;
-                }
+
+                // 2. 狀態與過敏篩選
+                const triedCount = item.history.length;
+                const latestReaction = triedCount > 0 ? item.history[item.history.length - 1].reaction : null;
+
+                if (encFilterStatus === 'tried' && triedCount === 0) return false;
+                if (encFilterStatus === 'untried' && triedCount > 0) return false;
+                if (encFilterStatus === 'allergic' && (!latestReaction || !['mild', 'moderate', 'severe'].includes(latestReaction))) return false;
+                if (encFilterStatus === 'no_allergy' && (!latestReaction || latestReaction !== 'none')) return false;
+
                 return true;
             });
 
-            const getPillStyle = (isSelected) => isSelected
-                ? 'bg-blue-600 text-white border-blue-700 font-extrabold shadow-sm'
-                : 'bg-transparent text-cream-text border-cream-text/40 hover:bg-cream-secondary/30 font-bold';
+            let catButtonsHtml = categories.map(c => {
+                const isActive = encFilterCat === c.id;
+                const btnClass = isActive ? 'bg-cream-primary text-white' : 'bg-white text-cream-text hover:bg-cream-bg';
+                return `<button onclick="setEncFilter('cat', '${c.id}')" class="px-3 py-1.5 rounded-full text-xs font-bold border-2 border-cream-text shadow-sm ${btnClass} transition">${c.label}</button>`;
+            }).join('');
+
+            let statusButtonsHtml = statuses.map(s => {
+                const isActive = encFilterStatus === s.id;
+                const btnClass = isActive ? 'bg-cream-primary text-white' : 'bg-white text-cream-text hover:bg-cream-bg';
+                return `<button onclick="setEncFilter('status', '${s.id}')" class="px-3 py-1.5 rounded-full text-xs font-bold border-2 border-cream-text shadow-sm ${btnClass} transition">${s.label}</button>`;
+            }).join('');
+
+            let itemsHtml = filtered.map(item => {
+                const triedCount = item.history.length;
+                const isUnlocked = triedCount >= 3;
+                let displayEmoji = isUnlocked ? item.unlockEmoji : item.seedEmoji;
+                let bgClass = isUnlocked ? "bg-emerald-50/70 border-emerald-500" : "bg-white border-cream-text";
+
+                // 只有自訂食材才會顯示刪除按鈕，官方圖鑑絕對不會顯示
+                const deleteBtnHtml = item.isCustom ? `
+                    <button type="button"
+                            onclick="event.stopPropagation(); confirmDeleteCustomIngredient('${item.id}')"
+                            title="刪除此自訂食材"
+                            class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-100 hover:bg-red-500 text-red-600 hover:text-white border border-red-300 flex items-center justify-center text-xs font-bold transition shadow-sm">
+                        🗑️
+                    </button>
+                ` : '';
+
+                return `
+                    <div onclick="openIngredientDetail('${item.id}')" class="relative ${bgClass} cream-box p-3 cursor-pointer flex items-center space-x-3 hover:scale-[1.01] transition">
+                        ${deleteBtnHtml}
+                        <div class="text-3xl p-2 bg-white rounded-2xl border-2 border-cream-text shadow-sm flex items-center justify-center w-12 h-12 shrink-0">
+                            ${displayEmoji}
+                        </div>
+                        <div class="overflow-hidden ${item.isCustom ? 'pr-5' : ''}">
+                            <div class="flex items-center space-x-1">
+                                <h4 class="font-extrabold text-sm truncate text-cream-text">${escapeHtml(item.name)}</h4>
+                                ${item.isCustom ? '<span class="shrink-0 text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 rounded-full font-extrabold">自訂</span>' : ''}
+                            </div>
+                            <p class="text-[10px] font-bold text-cream-muted">${isUnlocked ? '✨ 已解鎖' : `🌱 試吃中 (${triedCount}/3)`}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
 
             return `
                 <div class="space-y-4">
-                    <div class="flex items-center justify-between gap-2">
-                        <div class="w-20"></div>
-                        <h2 class="text-base sm:text-lg font-extrabold text-center">📖 ${escapeHtml(state.owner.nameZh)}農場食材總圖鑑</h2>
-                        <button onclick="syncAllCloudData(true)" ${isCloudSyncing ? 'disabled' : ''} class="cream-btn bg-white hover:bg-cream-secondary/40 px-2.5 py-1 text-[11px] font-extrabold shrink-0">
-                            ${isCloudSyncing ? '⏳ 同步中' : '🔄 同步圖鑑'}
-                        </button>
+                    <div class="flex items-center justify-center">
+                        <h2 class="text-base sm:text-lg font-extrabold">📖 ${escapeHtml(state.owner.nameZh)}農場食材總圖鑑</h2>
                     </div>
 
+                    <!-- 篩選器第一列：農場分類 -->
                     <div class="bg-white cream-box p-3 space-y-2">
-                        <div class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar pb-1">
-                            ${categories.map(c => `
-                                <button onclick="setEncFilter('cat', '${c.id}')" class="px-3 py-1 rounded-full border-2 text-xs whitespace-nowrap transition ${getPillStyle(encFilterCat === c.id)}">
-                                    ${c.label}
-                                </button>
-                            `).join('')}
-                        </div>
-
-                        <div class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar pt-1 border-t border-dashed border-cream-border">
-                            ${statuses.map(s => `
-                                <button onclick="setEncFilter('status', '${s.id}')" class="px-3 py-1 rounded-full border-2 text-xs whitespace-nowrap transition ${getPillStyle(encFilterStatus === s.id)}">
-                                    ${s.label}
-                                </button>
-                            `).join('')}
+                        <div class="text-xs font-extrabold text-cream-muted">🌾 農場分區篩選：</div>
+                        <div class="flex flex-wrap gap-1.5">
+                            ${catButtonsHtml}
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                        ${filtered.map(item => {
-                            const count = item.history.length;
-                            const isUnlocked = count >= 3;
-                            const encImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
-                            const encVisual = isUnlocked
-                                ? (encImgUrl
-                                    ? `<img src="${encImgUrl}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain p-1.5"><span style="display:none;" class="text-4xl">🎴</span>`
-                                    : `<span class="text-4xl">🎴</span>`)
-                                : `<span class="text-3xl">${item.seedEmoji}</span>`;
-                            if (isUnlocked) {
-                                return `
-                                    <div onclick="openIngredientDetail('${item.id}')" class="relative aspect-square bg-emerald-50 border-2 border-emerald-600 rounded-2xl overflow-hidden flex items-center justify-center cursor-pointer shadow-sm hover:scale-105 transition">
-                                        ${encVisual}
-                                        <span class="absolute bottom-1.5 right-1.5 bg-white/90 text-emerald-900 border border-emerald-600 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold leading-none shadow-sm">${count}/3</span>
-                                    </div>
-                                `;
-                            } else {
-                                return `
-                                    <div onclick="openIngredientDetail('${item.id}')" class="border-2 border-dashed border-gray-400 bg-gray-100/80 rounded-2xl p-3 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-200/70 transition">
-                                        <span class="text-3xl mb-1 opacity-75 h-11 flex items-center justify-center">${item.seedEmoji}</span>
-                                        <p class="font-bold text-xs text-gray-700 truncate w-full">${escapeHtml(item.name)}</p>
-                                        <span class="text-[10px] font-bold text-gray-500 mt-0.5">${count}/3</span>
-                                    </div>
-                                `;
-                            }
-                        }).join('')}
+                    <!-- 篩選器第二列：嚐試狀態與過敏 -->
+                    <div class="bg-white cream-box p-3 space-y-2">
+                        <div class="text-xs font-extrabold text-cream-muted">🔍 狀態與過敏篩選：</div>
+                        <div class="flex flex-wrap gap-1.5">
+                            ${statusButtonsHtml}
+                        </div>
                     </div>
-                    ${filtered.length === 0 ? `<div class="text-center py-8 text-xs text-cream-muted">沒有符合此篩選條件的食材喔 🌱</div>` : ''}
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        ${filtered.length > 0 ? itemsHtml : `<div class="col-span-full text-center py-8 text-xs text-cream-muted font-bold">沒有符合此篩選條件的食材喔 🌱</div>`}
+                    </div>
                 </div>
             `;
         }
+        function confirmDeleteCustomIngredient(customId) {
+        const target = state.customIngredients.find(i => i.id === customId);
+        if (!target) return; // 官方圖鑑食材直接阻擋，無法刪除
+
+        const recordCount = target.history ? target.history.length : 0;
+        const modalContent = document.getElementById('modal-content');
+        modalContent.innerHTML = `
+            <div class="text-center space-y-4 py-2">
+                <div class="text-4xl">🗑️</div>
+                <h3 class="text-lg font-extrabold text-cream-text">確定要刪除「${escapeHtml(target.name)}」嗎？</h3>
+                <p class="text-xs text-cream-muted leading-relaxed">
+                    這是您自行新增的食材${recordCount > 0 ? `，目前包含 <strong>${recordCount} 筆</strong>試吃紀錄，刪除後紀錄也會一併移除` : ''}。<br>
+                    此操作無法復原喔！
+                </p>
+                <div class="flex space-x-3 pt-2">
+                    <button type="button" onclick="closeModal()" class="flex-1 bg-white hover:bg-cream-bg text-cream-text font-extrabold py-2.5 cream-btn text-xs">
+                        取消保留
+                    </button>
+                    <button type="button" onclick="executeDeleteCustomIngredient('${target.id}')" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-extrabold py-2.5 cream-btn text-xs">
+                        確定刪除
+                    </button>
+                </div>
+            </div>
+        `;
+        document.getElementById('modal-container').classList.remove('hidden');
+    }
+
+    function executeDeleteCustomIngredient(customId) {
+        const index = state.customIngredients.findIndex(i => i.id === customId);
+        if (index === -1) return;
+
+        const removedName = state.customIngredients[index].name;
+        state.customIngredients.splice(index, 1);
+        saveState();
+        closeModal();
+        showToast(`🗑️ 已刪除自訂食材「${removedName}」`);
+        renderView('encyclopedia');
+    }
 
         // ==================== 10. 週曆 & 全部歷史紀錄管理 ====================
         let weekOffset = 0;
