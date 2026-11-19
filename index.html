@@ -545,7 +545,7 @@
             { id: 'fifty_kinds', title: '美食大富翁', desc: '累積嘗試過 50 種（含自訂）不同的食材', icon: '👑', condition: s => getTriedCount() >= 50 },
             { id: 'full_encyclopedia', title: '資深小農夫', desc: '解鎖圖鑑全部食材（每種皆吃滿 3 次）', icon: '👩‍🌾', condition: s => getUnlockedCount() >= Object.keys(s.ingredients).length },
 
-            { id: 'farm_sprout', title: '農場萌芽', desc: '第一次在農田、果樹或溫室完成「播種」，並成功解鎖首張圖鑑卡', icon: '🌱', condition: s => countCategoriesUnlocked(s, ['farm', 'orchard', 'greenhouse']) >= 1 },
+            { id: 'farm_sprout', title: '農場萌芽', desc: '第一次在農田、果樹或溫室完成「播種」，並成功解鎖首張圖鑑卡', icon: '🌱', condition: s => countCategoriesUnlocked(s, ['farm', 'orchard', 'greenhouse']) >= 3 },
             { id: 'green_elf', title: '卜派愛吃菜', desc: '在農田區解鎖「菠菜」圖鑑卡', icon: '🥗', condition: s => hasEatenFarmVeggie(s) >= 3 },
             { id: 'fruit_sweet', title: '水果甜心', desc: '在果樹區解鎖 3 種以上的水果類食材', icon: '🍎', condition: s => countCategoryUnlocked(s, 'orchard') >= 3 },
             { id: 'meat_grow', title: '吃肉肉長肉肉', desc: '第一次食用牧場區的肉類或蛋白質食材', icon: '🥩', condition: s => hasEatenCategory(s, 'pasture') },
@@ -737,16 +737,24 @@
 
         function checkAchievements() {
             let unlockedNew = false;
+            const validAchievements = [];
+        
             ACHIEVEMENTS_LIST.forEach(ach => {
-                if (!state.achievements.includes(ach.id)) {
-                    if (ach.condition(state)) {
-                        state.achievements.push(ach.id);
+                const isCurrentlyMet = Boolean(ach.condition(state));
+                const wasUnlocked = state.achievements.includes(ach.id);
+        
+                if (isCurrentlyMet) {
+                    validAchievements.push(ach.id);
+                    if (!wasUnlocked) {
                         unlockedNew = true;
                         showToast(`🏆 恭喜解鎖成就：${ach.title}！`);
                     }
                 }
             });
-            if (unlockedNew) {
+        
+            // 若有新增或收回成就，更新並存檔
+            if (unlockedNew || validAchievements.length !== state.achievements.length) {
+                state.achievements = validAchievements;
                 saveStateSilently();
             }
         }
@@ -1042,7 +1050,7 @@
                                  class="absolute inset-0 w-full h-full object-cover">
                         ` : ''}
                         <button onclick="router.navigate('farm_map')" class="absolute top-3 left-3 z-10 cream-btn bg-white/90 hover:bg-white px-3 py-1.5 text-xs font-bold">🗺️ 返回地圖</button>
-                        <div class="relative z-10 bg-white/75 backdrop-blur-sm border-2 border-cream-text/70 px-4 py-2 rounded-2xl shadow-sm mx-4 text-center">
+                        <div class="relative z-10 bg-white/50 backdrop-blur-sm px-4 py-2 rounded-2xl shadow-sm mx-4 text-center">
                             <h2 class="text-base sm:text-lg font-extrabold text-cream-text">${meta.title}</h2>
                         </div>
                     </div>
@@ -1693,7 +1701,7 @@
                         <input type="text" id="cust-name" required placeholder="例如：火龍果泥、寶寶麵線" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold mb-1">英文名稱 (圖鑑解鎖卡顯示用，選填)</label>
+                        <label class="block text-xs font-bold mb-1">英文名稱 (選填)</label>
                         <input type="text" id="cust-name-en" placeholder="例如：Dragon Fruit" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
