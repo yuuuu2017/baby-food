@@ -278,8 +278,8 @@
 
         function getActiveGasUrl() {
             return (state.gasUrl && state.gasUrl.trim().startsWith('http'))
-            ? state.gasUrl.trim()
-            : '';
+                ? state.gasUrl.trim()
+                : '';
         }
 
         function normalizeSheetCategory(rawCat) {
@@ -292,7 +292,7 @@
             return 'farm';
         }
 
-        // 建立要上傳給全家人共用的精簡資料包（避免過大 Base64 圖片超過試算表 50,000 字元上限）
+        // 建立要上傳給全家人共用的精簡資料包
         function buildCloudFamilyPayload() {
             const historyMap = {};
             Object.values(state.ingredients).forEach(ing => {
@@ -666,7 +666,138 @@
             return official || custom;
         }
 
-        function countCategoryUnlocked(s, cat)
+        function countCategoryUnlocked(s, cat) {
+            const officialCount = Object.values(s.ingredients).filter(i => i.category === cat && i.history.length >= 3).length;
+            const customCount = s.customIngredients.filter(i => i.category === cat && i.history.length >= 3).length;
+            return officialCount + customCount;
+        }
+
+        function countCategoriesUnlocked(s, cats) {
+            return cats.reduce((sum, cat) => sum + countCategoryUnlocked(s, cat), 0);
+        }
+
+        function hasCompletedThreeDayChallenge(s) {
+            const items = [...Object.values(s.ingredients), ...s.customIngredients];
+            return items.some(item => item.history.length >= 3);
+        }
+
+        function hasOvercomeAllergy(s) {
+            let items = [...Object.values(s.ingredients), ...s.customIngredients];
+            return items.some(item => {
+                let history = item.history;
+                if (history.length < 2) return false;
+                let hadAllergy = false;
+                for (let i = 0; i < history.length - 1; i++) {
+                    if (['mild', 'moderate', 'severe'].includes(history[i].reaction)) hadAllergy = true;
+                }
+                let lastReaction = history[history.length - 1].reaction;
+                return hadAllergy && lastReaction === 'none';
+            });
+        }
+
+        function getMaxConsecutiveNoAllergyStreak() {
+            const records = getAllRecords().slice().sort((a, b) => a.date.localeCompare(b.date));
+            let maxStreak = 0;
+            let currentStreak = 0;
+            records.forEach(r => {
+                if (r.reaction === 'none') {
+                    currentStreak++;
+                    if (currentStreak > maxStreak) maxStreak = currentStreak;
+                } else {
+                    currentStreak = 0;
+                }
+            });
+            return maxStreak;
+        }
+
+        function getMaxConsecutiveDays() {
+            const uniqueDates = Array.from(getUniqueRecordDates()).sort();
+            if (uniqueDates.length === 0) return 0;
+            let maxDays = 1;
+            let currentDays = 1;
+            for (let i = 1; i < uniqueDates.length; i++) {
+                const [y1, m1, d1] = uniqueDates[i - 1].split('-').map(Number);
+                const [y2, m2, d2] = uniqueDates[i].split('-').map(Number);
+                const t1 = Date.UTC(y1, m1 - 1, d1);
+                const t2 = Date.UTC(y2, m2 - 1, d2);
+                const diffDays = Math.round((t2 - t1) / (1000 * 60 * 60 * 24));
+                if (diffDays === 1) {
+                    currentDays++;
+                    if (currentDays > maxDays) maxDays = currentDays;
+                } else if (diffDays > 1) {
+                    currentDays = 1;
+                }
+            }
+            return maxDays;
+        }
+
+        function getSavedPolaroidPhotosCount(s) {
+            return Object.values(s.polaroids).filter(p => p && p.imageUrl && p.imageUrl.trim().length > 0).length;
+        }
+
+        function getUniqueRecordDates() {
+            const dates = new Set();
+            getAllRecords().forEach(r => dates.add(r.date));
+            return dates;
+        }
+
+        function getNotesCount() {
+            return getAllRecords().filter(r => r.notes && r.notes.trim().length > 0).length;
+        }
+
+        function updateHeaderInfo() {
+            document.getElementById('header-baby-age').innerText = getBabyAgeString();
+            document.getElementById('header-unlock-count').innerText = `${getOfficialUnlockedCount()}/${Object.keys(state.ingredients).length}`;
+        }
+
+        function checkAchievements() {
+            let unlockedNew = false;
+            const validAchievements = [];
+
+            ACHIEVEMENTS_LIST.forEach(ach => {
+                const isCurrentlyMet = Boolean(ach.condition(state));
+                const wasUnlocked = state.achievements.includes(ach.id);
+
+                if (isCurrentlyMet) {
+                    validAchievements.push(ach.id);
+                    if (!wasUnlocked) {
+                        unlockedNew = true;
+                        showToast(`🏆 恭喜解鎖成就：${ach.title}！`);
+                    }
+                }
+            });
+
+            if (unlockedNew || validAchievements.length !== state.achievements.length) {
+                state.achievements = validAchievements;
+                saveStateSilently();
+            }
+        }
+
+        function showToast(message) {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.className = 'fixed top-16 right-4 z-50 flex flex-col items-end space-y-2 pointer-events-none max-w-[85vw]';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = 'bg-cream-text text-white px-4 py-2.5 rounded-2xl border-2 border-cream-secondary shadow-xl text-xs sm:text-sm font-bold flex items-center space-x-2 pointer-events-auto transition-all duration-300 transform translate-y-0 opacity-100';
+            toast.innerHTML = `<span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-6px)';
+                setTimeout(() => {
+                    toast.remove();
+                    if (container && container.children.length === 0) {
+                        container.remove();
+                    }
+                }, 300);
+            }, 3200);
+        }
 
         // ==================== 4. Router 導覽系統 ====================
         const router = {
@@ -840,7 +971,7 @@
             `;
         }
 
-        // 出發去農場地圖頁面（農舍與果樹區對調，魚池與溫室對調）
+        // 出發去農場地圖頁面
         function renderFarmMapView() {
             const avatarUrl = state.owner.avatarUrl;
             const avatarHtml = avatarUrl 
@@ -908,7 +1039,7 @@
             }, 420);
         }
 
-        // 分區清單與卡片（頂部加入背景圖橫幅、左上角返回地圖、中央半透明標題、下方說明文字；解鎖後移除文字並放大圖片）
+        // 分區清單與卡片（上方純圖片橫幅，下方左側分區標題＋右側返回地圖按鈕）
         function renderSectionView(category) {
             const catMeta = {
                 'farm': { title: '🌾 農田區（五穀/蔬菜）', desc: '第一次播種，第二次澆水，第三次豐收！', bannerUrl: '', fallbackBg: 'from-emerald-100 via-amber-50 to-lime-100' },
@@ -926,19 +1057,19 @@
 
             let html = `
                 <div class="space-y-4">
-                    <div class="relative w-full h-36 sm:h-44 border-cream-text overflow-hidden shadow-sm bg-gradient-to-br ${meta.fallbackBg} flex items-center justify-center">
+                    <div class="relative w-full h-36 sm:h-44 rounded-2xl border-2 border-cream-text overflow-hidden shadow-sm bg-gradient-to-br ${meta.fallbackBg} flex items-center justify-center">
                         ${normalizedBannerUrl ? `
                             <img src="${normalizedBannerUrl}" alt="${escapeHtml(meta.title)}"
                                  onerror="this.style.display='none';"
                                  class="absolute inset-0 w-full h-full object-cover">
                         ` : ''}
                     </div>
-                <div class="flex items-center justify-between gap-2 px-1">
-                    <h2 class="text-base sm:text-lg font-extrabold text-cream-text text-left">${meta.title}</h2>
-                    <button onclick="router.navigate('farm_map')" class="shrink-0 cream-btn bg-white hover:bg-cream-secondary/40 px-3 py-1.5 text-xs font-bold">
-                        🗺️ 返回地圖
-                    </button>
-                </div>
+                    <div class="flex items-center justify-between gap-2 px-1">
+                        <h2 class="text-base sm:text-lg font-extrabold text-cream-text text-left">${meta.title}</h2>
+                        <button onclick="router.navigate('farm_map')" class="shrink-0 cream-btn bg-white hover:bg-cream-secondary/40 px-3 py-1.5 text-xs font-bold">
+                            🗺️ 返回地圖
+                        </button>
+                    </div>
                     <p class="text-xs text-cream-muted text-center bg-white/70 py-1.5 px-3 rounded-full border border-cream-border">${meta.desc}</p>
 
                     <div class="grid grid-cols-2 gap-3.5">
@@ -1387,7 +1518,6 @@
             throw new Error(result.message || '雲端硬碟未回傳網址');
         }
 
-        // 立可拍相片：從手機相簿選擇 → 自動壓縮 → 上傳至 Google 雲端硬碟 → 取得全家共用網址
         async function handlePolaroidFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -1395,7 +1525,6 @@
                 showToast('⏳ 正在壓縮並上傳至 Google 雲端硬碟...');
                 const compressedBase64 = await compressImageFile(file, 720, 0.8);
                 
-                // 先在本地顯示預覽圖
                 const previewBox = document.getElementById('polaroid-preview-box');
                 const previewImg = document.getElementById('polaroid-preview-img');
                 if (previewBox && previewImg) {
@@ -1403,7 +1532,6 @@
                     previewBox.classList.remove('hidden');
                 }
 
-                // 上傳至 Google 雲端硬碟取得全家人可共用的連結
                 const cloudImageUrl = await uploadImageToCloudDrive(compressedBase64, 'polaroid');
                 document.getElementById('polaroid-url').value = cloudImageUrl;
                 if (previewImg) previewImg.src = cloudImageUrl;
@@ -1415,7 +1543,6 @@
             }
         }
 
-        // 農場主人頭像：從手機相簿選擇 → 自動壓縮 → 上傳至 Google 雲端硬碟 → 取得全家共用網址
         async function handleOwnerAvatarFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -1423,7 +1550,10 @@
                 showToast('⏳ 正在上傳寶寶頭像至 Google 雲端硬碟...');
                 const compressedBase64 = await compressImageFile(file, 400, 0.82);
                 const previewImg = document.getElementById('owner-avatar-preview');
-                if (previewImg) previewImg.src = compressedBase64;
+                if (previewImg) {
+                    previewImg.src = compressedBase64;
+                    previewImg.classList.remove('hidden');
+                }
 
                 const cloudImageUrl = await uploadImageToCloudDrive(compressedBase64, 'avatar');
                 document.getElementById('owner-avatar').value = cloudImageUrl;
@@ -1697,11 +1827,11 @@
                             </p>
                             <input type="url" id="gas-url-input" value="${escapeHtml(state.gasUrl || '')}" placeholder="貼上 https://script.google.com/macros/s/.../exec" class="w-full p-2.5 border-2 border-cream-text rounded-xl text-xs bg-cream-bg">
                             <div class="flex gap-2">
-                                <button type="button" onclick="saveAndSyncGasUrl()" class="flex-1 bg-cream-secondary hover:bg-cream-sage/80 text-cream-text font-extrabold py-2.5 cream-btn text-xs">
+                                <button type="button" onclick="saveAndSyncGasUrl()" class="flex-1 bg-cream-secondary hover:bg-cream-secondary/80 text-cream-text font-extrabold py-2.5 cream-btn text-xs">
                                     🔄 儲存網址並立即同步
                                 </button>
                                 ${activeUrl ? `
-                                    <button type="button" onclick="clearGasUrl()" class="bg-white hover:bg-red-50 text-cream-red font-extrabold px-3 py-2.5 cream-btn text-xs">
+                                    <button type="button" onclick="clearGasUrl()" class="bg-white hover:bg-red-50 text-red-600 font-extrabold px-3 py-2.5 cream-btn text-xs">
                                         清除網址
                                     </button>
                                 ` : ''}
@@ -1753,7 +1883,7 @@
             renderView('owner');
         }
 
-        // ==================== 9. 食材圖鑑 (雙列進階篩選) ====================
+        // ==================== 9. 食材圖鑑 (雙列進階篩選 + 自訂食材安全刪除) ====================
         let encFilterCat = 'all';
         let encFilterStatus = 'all';
 
@@ -1822,7 +1952,12 @@
             let itemsHtml = filtered.map(item => {
                 const triedCount = item.history.length;
                 const isUnlocked = triedCount >= 3;
-                let displayEmoji = isUnlocked ? item.unlockEmoji : item.seedEmoji;
+                const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
+                let displayVisual = isUnlocked
+                    ? (normalizedImgUrl
+                        ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-2xl">🎴</span>`
+                        : `<span class="text-2xl">🎴</span>`)
+                    : item.seedEmoji;
                 let bgClass = isUnlocked ? "bg-emerald-50/70 border-emerald-500" : "bg-white border-cream-text";
 
                 // 只有自訂食材才會顯示刪除按鈕，官方圖鑑絕對不會顯示
@@ -1838,8 +1973,8 @@
                 return `
                     <div onclick="openIngredientDetail('${item.id}')" class="relative ${bgClass} cream-box p-3 cursor-pointer flex items-center space-x-3 hover:scale-[1.01] transition">
                         ${deleteBtnHtml}
-                        <div class="text-3xl p-2 bg-white rounded-2xl border-2 border-cream-text shadow-sm flex items-center justify-center w-12 h-12 shrink-0">
-                            ${displayEmoji}
+                        <div class="text-3xl p-1.5 bg-white rounded-2xl border-2 border-cream-text shadow-sm flex items-center justify-center w-12 h-12 shrink-0 overflow-hidden">
+                            ${displayVisual}
                         </div>
                         <div class="overflow-hidden ${item.isCustom ? 'pr-5' : ''}">
                             <div class="flex items-center space-x-1">
@@ -1880,44 +2015,45 @@
                 </div>
             `;
         }
+
         function confirmDeleteCustomIngredient(customId) {
-        const target = state.customIngredients.find(i => i.id === customId);
-        if (!target) return; // 官方圖鑑食材直接阻擋，無法刪除
+            const target = state.customIngredients.find(i => i.id === customId);
+            if (!target) return; // 官方圖鑑食材直接阻擋，無法刪除
 
-        const recordCount = target.history ? target.history.length : 0;
-        const modalContent = document.getElementById('modal-content');
-        modalContent.innerHTML = `
-            <div class="text-center space-y-4 py-2">
-                <div class="text-4xl">🗑️</div>
-                <h3 class="text-lg font-extrabold text-cream-text">確定要刪除「${escapeHtml(target.name)}」嗎？</h3>
-                <p class="text-xs text-cream-muted leading-relaxed">
-                    這是您自行新增的食材${recordCount > 0 ? `，目前包含 <strong>${recordCount} 筆</strong>試吃紀錄，刪除後紀錄也會一併移除` : ''}。<br>
-                    此操作無法復原喔！
-                </p>
-                <div class="flex space-x-3 pt-2">
-                    <button type="button" onclick="closeModal()" class="flex-1 bg-white hover:bg-cream-bg text-cream-text font-extrabold py-2.5 cream-btn text-xs">
-                        取消保留
-                    </button>
-                    <button type="button" onclick="executeDeleteCustomIngredient('${target.id}')" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-extrabold py-2.5 cream-btn text-xs">
-                        確定刪除
-                    </button>
+            const recordCount = target.history ? target.history.length : 0;
+            const modalContent = document.getElementById('modal-content');
+            modalContent.innerHTML = `
+                <div class="text-center space-y-4 py-2">
+                    <div class="text-4xl">🗑️</div>
+                    <h3 class="text-lg font-extrabold text-cream-text">確定要刪除「${escapeHtml(target.name)}」嗎？</h3>
+                    <p class="text-xs text-cream-muted leading-relaxed">
+                        這是您自行新增的食材${recordCount > 0 ? `，目前包含 <strong>${recordCount} 筆</strong>試吃紀錄，刪除後紀錄也會一併移除` : ''}。<br>
+                        此操作無法復原喔！
+                    </p>
+                    <div class="flex space-x-3 pt-2">
+                        <button type="button" onclick="closeModal()" class="flex-1 bg-white hover:bg-cream-bg text-cream-text font-extrabold py-2.5 cream-btn text-xs">
+                            取消保留
+                        </button>
+                        <button type="button" onclick="executeDeleteCustomIngredient('${target.id}')" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-extrabold py-2.5 cream-btn text-xs">
+                            確定刪除
+                        </button>
+                    </div>
                 </div>
-            </div>
-        `;
-        document.getElementById('modal-container').classList.remove('hidden');
-    }
+            `;
+            document.getElementById('modal-container').classList.remove('hidden');
+        }
 
-    function executeDeleteCustomIngredient(customId) {
-        const index = state.customIngredients.findIndex(i => i.id === customId);
-        if (index === -1) return;
+        function executeDeleteCustomIngredient(customId) {
+            const index = state.customIngredients.findIndex(i => i.id === customId);
+            if (index === -1) return;
 
-        const removedName = state.customIngredients[index].name;
-        state.customIngredients.splice(index, 1);
-        saveState();
-        closeModal();
-        showToast(`🗑️ 已刪除自訂食材「${removedName}」`);
-        renderView('encyclopedia');
-    }
+            const removedName = state.customIngredients[index].name;
+            state.customIngredients.splice(index, 1);
+            saveState();
+            closeModal();
+            showToast(`🗑️ 已刪除自訂食材「${removedName}」`);
+            renderView('encyclopedia');
+        }
 
         // ==================== 10. 週曆 & 全部歷史紀錄管理 ====================
         let weekOffset = 0;
