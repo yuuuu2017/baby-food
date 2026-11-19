@@ -343,7 +343,7 @@
                         body: JSON.stringify(payload)
                     });
                 } catch (err) {
-                    console.warn('雲端全家紀錄寫入失敗：', err);
+                    console.warn('雲端紀錄寫入失敗：', err);
                 }
             }, immediate ? 50 : 600);
         }
@@ -493,7 +493,7 @@
                 updateHeaderInfo();
                 checkAchievements();
                 if (showFeedback) {
-                    showToast('☁️ 已同步最新食材圖鑑與全家人紀錄！');
+                    showToast('☁️ 已同步最新食材圖鑑與紀錄！');
                 }
             } catch (err) {
                 console.warn('雲端同步異常：', err);
@@ -546,9 +546,7 @@
             { id: 'full_encyclopedia', title: '資深小農夫', desc: '解鎖圖鑑全部食材（每種皆吃滿 3 次）', icon: '👩‍🌾', condition: s => getUnlockedCount() >= Object.keys(s.ingredients).length },
 
             { id: 'farm_sprout', title: '農場萌芽', desc: '第一次在農田、果樹或溫室完成「播種」，並成功解鎖首張圖鑑卡', icon: '🌱', condition: s => countCategoriesUnlocked(s, ['farm', 'orchard', 'greenhouse']) >= 1 },
-            { id: 'veggie_popeye', title: '卜派愛吃菜', desc: '第一次食用農田區的蔬菜類食材', icon: '🍃', condition: s => hasEatenFarmVeggie(s) },
-            { id: 'grain_master', title: '五穀豐登', desc: '解鎖農田區五穀類食材（白米/十倍粥、糙米、燕麥）', icon: '🌾', condition: s => hasUnlockedGrains(s) },
-            { id: 'green_elf', title: '綠色小精靈', desc: '在農田區解鎖 5 種以上的蔬菜類食材', icon: '🥗', condition: s => countFarmVeggieUnlocked(s) >= 5 },
+            { id: 'green_elf', title: '卜派愛吃菜', desc: '在農田區解鎖「菠菜」圖鑑卡', icon: '🥗', condition: s => hasEatenFarmVeggie(s) >= 3 },
             { id: 'fruit_sweet', title: '水果甜心', desc: '在果樹區解鎖 3 種以上的水果類食材', icon: '🍎', condition: s => countCategoryUnlocked(s, 'orchard') >= 3 },
             { id: 'meat_grow', title: '吃肉肉長肉肉', desc: '第一次食用牧場區的肉類或蛋白質食材', icon: '🥩', condition: s => hasEatenCategory(s, 'pasture') },
             { id: 'egg_happiness', title: '蛋蛋的幸福', desc: '成功解鎖牧場區的「蛋黃 / 雞蛋」圖鑑卡', icon: '🐣', condition: s => hasUnlockedEgg(s) },
@@ -560,8 +558,8 @@
             { id: 'allergy_brave', title: '抗敏小鬥士', desc: '第一次吃到曾引起過敏反應的食材，在之後再次嘗試時順利過關（無過敏反應）', icon: '🛡️', condition: s => hasOvercomeAllergy(s) },
             { id: 'iron_stomach', title: '鐵胃小超人', desc: '連續 10 次副食品紀錄皆顯示為「無過敏反應（綠燈）」', icon: '💚', condition: s => getMaxConsecutiveNoAllergyStreak() >= 10 },
             { id: 'careful_guardian', title: '細心守護者', desc: '首次記錄並標記過敏反應', icon: '🚨', condition: s => getAllRecords().some(r => ['mild', 'moderate', 'severe'].includes(r.reaction)) },
-            { id: 'harvest_farmer', title: '豐收小農夫', desc: '在植物類分區（農田、果樹、溫室）累計獲得 10 張「豐收了！」圖鑑卡', icon: '🪏', condition: s => countCategoriesUnlocked(s, ['farm', 'orchard', 'greenhouse']) >= 10 },
-            { id: 'pasture_tycoon', title: '牧場大亨', desc: '在動物性蛋白分區（魚池、牧場）累計獲得 5 張「長大了！」圖鑑卡', icon: '🍽️', condition: s => countCategoriesUnlocked(s, ['fish', 'pasture']) >= 5 },
+            { id: 'harvest_farmer', title: '豐收小農夫', desc: '在植物類分區（農田、果樹、溫室）累計獲得 10 張圖鑑卡', icon: '🪏', condition: s => countCategoriesUnlocked(s, ['farm', 'orchard', 'greenhouse']) >= 10 },
+            { id: 'pasture_tycoon', title: '牧場大亨', desc: '在動物性蛋白分區（魚池、牧場）累計獲得 5 張圖鑑卡', icon: '🍽️', condition: s => countCategoriesUnlocked(s, ['fish', 'pasture']) >= 5 },
 
             { id: 'weekly_perfect', title: '週週全勤獎', desc: '連續 7 天紀錄副食品', icon: '7️⃣', condition: s => getMaxConsecutiveDays() >= 7 },
             { id: 'persistent_30', title: '持之以恆', desc: '累積記錄副食品的天數達到 30 天', icon: '🗓️', condition: s => getUniqueRecordDates().size >= 30 },
@@ -574,16 +572,17 @@
         ];
 
         // ==================== 3. 輔助計算函式 ====================
-        function isGrainItem(item) {
-            if (!item) return false;
-            return GRAIN_IDS.includes(item.id) || /米|粥|燕麥|玉米/.test(item.name || '');
-        }
-
-        function hasUnlockedGrains(s) {
-            const grainItems = Object.values(s.ingredients).filter(isGrainItem);
-            if (grainItems.length === 0) return false;
-            const unlockedGrains = grainItems.filter(i => i.history.length >= 3);
-            return unlockedGrains.length >= Math.min(3, grainItems.length);
+        const POPEYE_SECRET_IDS = ['spinach'];
+        const POPEYE_SECRET_NAMES = ['菠菜'];
+        function hasEatenFarmVeggie(s) {
+            const allIngs = [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
+            return allIngs.some(ing => {
+                if (ing.category !== 'farm') return false;
+                const idLower = String(ing.id || '').toLowerCase().trim();
+                const nameStr = String(ing.name || '').trim();
+                const isSecretVeggie = POPEYE_SECRET_IDS.includes(idLower) || POPEYE_SECRET_NAMES.some(v => nameStr.includes(v));
+                return isSecretVeggie && (ing.history && ing.history.length >= 1);
+            });
         }
 
         function hasUnlockedEgg(s) {
@@ -650,18 +649,6 @@
             const official = Object.values(s.ingredients).some(i => i.category === cat && i.history.length > 0);
             const custom = s.customIngredients.some(i => i.category === cat && i.history.length > 0);
             return official || custom;
-        }
-
-        function hasEatenFarmVeggie(s) {
-            const officialVeggie = Object.values(s.ingredients).some(i => i.category === 'farm' && !isGrainItem(i) && i.history.length > 0);
-            const customFarm = s.customIngredients.some(i => i.category === 'farm' && i.history.length > 0);
-            return officialVeggie || customFarm;
-        }
-
-        function countFarmVeggieUnlocked(s) {
-            const officialCount = Object.values(s.ingredients).filter(i => i.category === 'farm' && !isGrainItem(i) && i.history.length >= 3).length;
-            const customCount = s.customIngredients.filter(i => i.category === 'farm' && i.history.length >= 3).length;
-            return officialCount + customCount;
         }
 
         function countCategoryUnlocked(s, cat) {
@@ -858,7 +845,7 @@
             const fallbackDriveUrl = 'https://drive.google.com/uc?export=view&id=14YkCxyGzwGftiol19JgZs3Whev6nzVF9';
             return `
                 <div class="relative ${extraClass} flex items-center justify-center">
-                    <img src="${primaryUrl}" alt="婚貴悠閒農場星球"
+                    <img src="${primaryUrl}" alt="農場星球"
                          onerror="if (!this.dataset.triedFallback) { this.dataset.triedFallback = '1'; this.src = '${fallbackDriveUrl}'; } else { this.style.display = 'none'; this.nextElementSibling.style.display = 'block'; }"
                          class="w-full h-full object-contain rounded-full">
                     <svg style="display:none;" viewBox="0 0 260 260" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -1035,8 +1022,8 @@
             const catMeta = {
                 'farm': { title: '🌾 農田區（五穀/蔬菜）', desc: '第一次播種，第二次澆水，第三次豐收！', bannerUrl: '', fallbackBg: 'from-emerald-100 via-amber-50 to-lime-100' },
                 'orchard': { title: '🌳 果樹區（水果）', desc: '酸甜好滋味，慢慢播種澆水等待豐收', bannerUrl: '', fallbackBg: 'from-rose-100 via-amber-50 to-orange-100' },
-                'fish': { title: '🐟 魚池（魚類/海鮮）', desc: '每次都是餵食，三次過後魚兒就長大囉！', bannerUrl: 'https://drive.google.com/file/d/1pgtM55x9weBAEcZOoONbvvogi1xYDh2A/view?usp=drivesdk', fallbackBg: 'from-sky-100 via-cyan-50 to-teal-100' },
-                'pasture': { title: '🥩 牧場區（蛋白質/肉類）', desc: '頭好壯壯必備，餵食三次解鎖長大圖鑑！', bannerUrl: '', fallbackBg: 'from-amber-100 via-yellow-50 to-stone-100' },
+                'fish': { title: '🐟 魚池（魚類/海鮮）', desc: '撒餌三次，釣起魚兒！', bannerUrl: 'https://drive.google.com/file/d/1pgtM55x9weBAEcZOoONbvvogi1xYDh2A/view?usp=drivesdk', fallbackBg: 'from-sky-100 via-cyan-50 to-teal-100' },
+                'pasture': { title: '🥩 牧場區（蛋白質/肉類）', desc: '頭好壯壯必備！', bannerUrl: '', fallbackBg: 'from-amber-100 via-yellow-50 to-stone-100' },
                 'greenhouse': { title: '🪵 溫室（菇類）', desc: '細心照料，播種與澆水後的溫室大豐收', bannerUrl: '', fallbackBg: 'from-stone-200 via-amber-50 to-emerald-100' }
             };
             const meta = catMeta[category] || { title: '農場分區', desc: '', bannerUrl: '', fallbackBg: 'from-cream-secondary/40 to-white' };
@@ -1048,7 +1035,7 @@
 
             let html = `
                 <div class="space-y-4">
-                    <div class="relative w-full h-36 sm:h-44 rounded-2xl border-2 border-cream-text overflow-hidden shadow-sm bg-gradient-to-br ${meta.fallbackBg} flex items-center justify-center">
+                    <div class="relative w-full h-36 sm:h-44 border-cream-text overflow-hidden shadow-sm bg-gradient-to-br ${meta.fallbackBg} flex items-center justify-center">
                         ${normalizedBannerUrl ? `
                             <img src="${normalizedBannerUrl}" alt="${escapeHtml(meta.title)}"
                                  onerror="this.style.display='none';"
@@ -1280,7 +1267,7 @@
             if (prevCount < 3 && newCount >= 3) {
                 openIngredientUnlockCardModal(item.id);
             } else {
-                showToast(`🎉 成功記錄 ${item.name}！（已同步給家人）`);
+                showToast(`🎉 成功記錄 ${item.name}！`);
             }
             renderView(router.currentView, router.currentParams || {});
         }
@@ -1423,7 +1410,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-xs font-bold mb-1">🔗 或貼上雲端圖片網址 (貼網址可同步到家人手機)</label>
+                        <label class="block text-xs font-bold mb-1">🔗 或貼上雲端圖片網址</label>
                         <input type="text" id="polaroid-url" value="${escapeHtml(currentData.imageUrl)}" placeholder="貼上雲端連結或選擇相簿照片" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white">
                     </div>
 
@@ -1549,7 +1536,7 @@
                 document.getElementById('owner-avatar').value = cloudImageUrl;
                 if (previewImg) previewImg.src = cloudImageUrl;
 
-                showToast('☁️ 頭像已存入雲端硬碟！請點擊「儲存主人設定」同步給家人');
+                showToast('☁️ 頭像已存入雲端硬碟');
             } catch (err) {
                 console.error(err);
                 showToast('⚠️ 頭像上傳失敗（請確認 GAS 已建立新版本並授權雲端硬碟權限）');
@@ -1688,7 +1675,7 @@
             if (prevCount < 3 && newCount >= 3) {
                 openIngredientUnlockCardModal(item.id);
             } else {
-                showToast(`⚡ 已快速記錄：${item.name}！（已同步給家人）`);
+                showToast(`⚡ 已快速記錄：${item.name}！`);
             }
             renderView(router.currentView, router.currentParams || {});
         }
@@ -1751,7 +1738,7 @@
             });
             saveState();
             closeModal();
-            showToast(`✨ 已新增自訂食材「${name}」！（已同步給家人）`);
+            showToast(`✨ 已新增自訂食材「${name}」！`);
             router.navigate('section', { category });
         }
 
