@@ -247,7 +247,7 @@
             customIngredients: [],
             achievements: [],
             polaroids: {},
-            travels: [], 
+            travels: [],
             gasUrl: ""
         };
 
@@ -270,6 +270,13 @@
                     ? parsed.gasUrl.trim()
                     : ((parsed.ingredientsGasUrl && parsed.ingredientsGasUrl.trim()) ? parsed.ingredientsGasUrl.trim() : '');
 
+                const safeTravels = Array.isArray(parsed.travels)
+                    ? parsed.travels.map(t => ({
+                        ...t,
+                        photos: Array.isArray(t.photos) ? t.photos.slice(0, 3) : []
+                    }))
+                    : [];
+
                 return {
                     ...JSON.parse(JSON.stringify(DEFAULT_STATE)),
                     ...parsed,
@@ -278,7 +285,7 @@
                     customIngredients: Array.isArray(parsed.customIngredients) ? parsed.customIngredients : [],
                     achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
                     polaroids: parsed.polaroids && typeof parsed.polaroids === 'object' ? parsed.polaroids : {},
-                    travels: Array.isArray(parsed.travels) ? parsed.travels : [],
+                    travels: safeTravels,
                     gasUrl: resolvedGasUrl
                 };
             } catch (e) {
@@ -399,6 +406,13 @@
                 };
             });
 
+            const safeTravels = (state.travels || []).map(t => ({
+                ...t,
+                photos: (Array.isArray(t.photos) ? t.photos : [])
+                    .filter(u => !String(u).startsWith('data:'))
+                    .slice(0, 3)
+            }));
+
             const safeAvatar = String(state.owner.avatarUrl || '');
             return {
                 owner: {
@@ -411,7 +425,7 @@
                 customIngredients: state.customIngredients || [],
                 achievements: state.achievements || [],
                 polaroids: safePolaroids,
-                travels: state.travels || []
+                travels: safeTravels
             };
         }
 
@@ -472,7 +486,21 @@
             if (Array.isArray(cloudState.achievements)) {
                 state.achievements = cloudState.achievements;
             }
-            if (Array.isArray(cloudState.travels)) state.travels = cloudState.travels;
+            if (Array.isArray(cloudState.travels)) {
+                const localTravelsMap = {};
+                (state.travels || []).forEach(lt => { localTravelsMap[lt.id] = lt; });
+                state.travels = cloudState.travels.map(ct => {
+                    const localT = localTravelsMap[ct.id];
+                    const remotePhotos = Array.isArray(ct.photos) ? ct.photos : [];
+                    const localBase64Photos = (localT && Array.isArray(localT.photos))
+                        ? localT.photos.filter(u => String(u).startsWith('data:'))
+                        : [];
+                    return {
+                        ...ct,
+                        photos: [...remotePhotos, ...localBase64Photos].slice(0, 3)
+                    };
+                });
+            }
             if (cloudState.polaroids && typeof cloudState.polaroids === 'object') {
                 Object.keys(cloudState.polaroids).forEach(achId => {
                     const remoteP = cloudState.polaroids[achId];
@@ -1138,7 +1166,7 @@
                                 <span class="bg-cream-text text-white text-[10px] px-2 py-0.5 rounded-full font-bold mt-1 shadow">${escapeHtml(state.owner.nameZh)}</span>
                             </div>
 
-                            <!-- 六大區域按鈕（已修正變數名稱） -->
+                            <!-- 六大區域按鈕 -->
                             ${orbitButtonsHtml}
                         </div>
                     </div>
@@ -1179,11 +1207,11 @@
         // 分區清單與卡片
         function renderSectionView(category) {
             const catMeta = {
-                'farm': { title: '🌾 農田區（五穀/蔬菜）', desc: '陽光灑落金黃稻穗，慢慢灌溉期待大豐收～', bannerUrl: 'https://drive.google.com/file/d/1oaLJm4MfRsF-ZJga7WU8Uf3QzM16yGZi/view?usp=drivesdk', fallbackBg: 'from-emerald-100 via-amber-50 to-lime-100' },
-                'orchard': { title: '🌳 果樹區（水果）', desc: '酸甜好滋味，一起等待果實熟透！', bannerUrl: 'https://drive.google.com/file/d/1ki8yl4ZRdy26HVnUgg4oyUn4kmQxwT2Z/view?usp=drivesdk', fallbackBg: 'from-rose-100 via-amber-50 to-orange-100' },
-                'fish': { title: '🐟 魚池（魚類/海鮮）', desc: '陽光閃閃的蔚藍小魚池，撒下飼料等魚兒游過來～', bannerUrl: 'https://drive.google.com/file/d/1pgtM55x9weBAEcZOoONbvvogi1xYDh2A/view?usp=drivesdk', fallbackBg: 'from-sky-100 via-cyan-50 to-teal-100' },
-                'pasture': { title: '🥩 牧場區（蛋白質/肉類）', desc: '大口吃肉長力氣，寶寶頭好壯壯！', bannerUrl: 'https://drive.google.com/file/d/1LXl879edMvAN7nwHKyxw85BcBRS_USry/view?usp=drivesdk', fallbackBg: 'from-amber-100 via-yellow-50 to-stone-100' },
-                'greenhouse': { title: '🪵 溫室（菇類）', desc: '藏在樹蔭與霧氣裡的秘密基地，菇菇正在長大中～', bannerUrl:'https://drive.google.com/file/d/1dUQY7citMAWn4FO3yGMm709QhAmg2iN6/view?usp=drivesdk', fallbackBg: 'from-stone-200 via-amber-50 to-emerald-100' }
+                'farm': { title: '🌾 農田區（五穀/蔬菜）', desc: '播種澆水三次，收成滿滿元氣鮮蔬！', bannerUrl: 'https://drive.google.com/file/d/1oaLJm4MfRsF-ZJga7WU8Uf3QzM16yGZi/view?usp=drivesdk', fallbackBg: 'from-emerald-100 via-amber-50 to-lime-100' },
+                'orchard': { title: '🌳 果樹區（水果）', desc: '播種澆水三次，摘下香甜多汁的果實！', bannerUrl: 'https://drive.google.com/file/d/1ki8yl4ZRdy26HVnUgg4oyUn4kmQxwT2Z/view?usp=drivesdk', fallbackBg: 'from-rose-100 via-amber-50 to-orange-100' },
+                'fish': { title: '🐟 魚池（魚類/海鮮）', desc: '撒餌餵食三次，看看會釣起哪隻小魚兒！', bannerUrl: 'https://drive.google.com/file/d/1pgtM55x9weBAEcZOoONbvvogi1xYDh2A/view?usp=drivesdk', fallbackBg: 'from-sky-100 via-cyan-50 to-teal-100' },
+                'pasture': { title: '🥩 牧場區（蛋白質/肉類）', desc: '餵食打卡三次，補充營養頭好壯壯！', bannerUrl: 'https://drive.google.com/file/d/1LXl879edMvAN7nwHKyxw85BcBRS_USry/view?usp=drivesdk', fallbackBg: 'from-amber-100 via-yellow-50 to-stone-100' },
+                'greenhouse': { title: '🪵 溫室（菇類）', desc: '濕潤涼爽的小木屋，噴噴水氣等菇菇冒出頭！', bannerUrl: 'https://drive.google.com/file/d/1dUQY7citMAWn4FO3yGMm709QhAmg2iN6/view?usp=drivesdk', fallbackBg: 'from-stone-200 via-amber-50 to-emerald-100' }
             };
             const meta = catMeta[category] || { title: '農場分區', desc: '', bannerUrl: '', fallbackBg: 'from-cream-secondary/40 to-white' };
             const normalizedBannerUrl = normalizeCloudImageUrl(meta.bannerUrl || '');
@@ -2640,6 +2668,17 @@
                         ? `${escapeHtml(t.startDate)} ～ ${escapeHtml(t.endDate)}`
                         : escapeHtml(t.startDate || '未設定日期');
 
+                    const photos = Array.isArray(t.photos) ? t.photos.slice(0, 3) : [];
+                    const photoThumbsHtml = photos.length > 0 ? `
+                        <div class="flex items-center gap-2 pt-0.5">
+                            ${photos.map((pUrl, pIdx) => `
+                                <img src="${escapeHtml(normalizeCloudImageUrl(pUrl))}" alt="旅程照片 ${pIdx + 1}"
+                                     onerror="this.style.display='none';"
+                                     class="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-xl border border-cream-text bg-cream-secondary/20">
+                            `).join('')}
+                        </div>
+                    ` : '';
+
                     return `
                         <div onclick="openTravelDetail('${t.id}')" class="bg-white cream-box p-4 cursor-pointer hover:bg-cream-secondary/15 transition space-y-2.5">
                             <div class="flex items-start justify-between gap-2">
@@ -2654,6 +2693,7 @@
                                         class="text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg border border-transparent hover:border-rose-200 font-bold"
                                         title="刪除旅遊紀錄">🗑️</button>
                             </div>
+                            ${photoThumbsHtml}
                             <div class="space-y-1">
                                 <div class="flex justify-between text-[11px] font-bold text-cream-muted">
                                     <span>🎒 打包進度</span>
@@ -2699,7 +2739,7 @@
 
                         ${showNewTravelForm ? `
                             <form onsubmit="handleCreateTravel(event)" class="bg-white cream-box p-4 space-y-3 border-2 border-cream-primary">
-                                <h3 class="text-sm font-extrabold text-cream-text">📝 建立新旅程（儲存後自動進入準備清單）</h3>
+                                <h3 class="text-sm font-extrabold text-cream-text">📝 建立新旅程（儲存後自動進入準備清單與相簿）</h3>
                                 <div>
                                     <label class="block text-xs font-bold text-cream-text mb-1">旅行名稱 *</label>
                                     <input type="text" id="travel-name-input" required placeholder="例如：宜蘭兩天一夜、沖繩親子遊"
@@ -2743,7 +2783,7 @@
 
                     <!-- 歷史旅遊紀錄列表 -->
                     <div class="space-y-2.5">
-                        <h3 class="text-xs sm:text-sm font-extrabold text-cream-text px-1">📚 歷史旅遊紀錄（點擊進入勾選清單）</h3>
+                        <h3 class="text-xs sm:text-sm font-extrabold text-cream-text px-1">📚 歷史旅遊紀錄（點擊進入相簿與勾選清單）</h3>
                         ${historyHtml}
                     </div>
                 </div>
@@ -2759,6 +2799,10 @@
                 </div>`;
             }
 
+            if (!Array.isArray(travel.photos)) {
+                travel.photos = [];
+            }
+
             let total = 0, checked = 0;
             travel.checklist.forEach(cat => {
                 cat.items.forEach(it => {
@@ -2770,6 +2814,46 @@
             const dateText = travel.endDate && travel.endDate !== travel.startDate
                 ? `${escapeHtml(travel.startDate)} ～ ${escapeHtml(travel.endDate)}`
                 : escapeHtml(travel.startDate || '未設定日期');
+
+            // 旅程紀念照片 HTML（最多 3 張）
+            const photos = travel.photos.slice(0, 3);
+            const photoSlotsHtml = photos.map((pUrl, idx) => {
+                const displayUrl = normalizeCloudImageUrl(pUrl);
+                return `
+                    <div class="relative aspect-square rounded-xl border-2 border-cream-text overflow-hidden bg-cream-secondary/20 shadow-sm group">
+                        <img src="${escapeHtml(displayUrl)}" alt="旅程照片 ${idx + 1}"
+                             onclick="openTravelPhotoPreviewModal(${idx})"
+                             onerror="this.onerror=null;this.src='https://placehold.co/300x300/E6CCB2/423830?text=Photo+${idx + 1}';"
+                             class="w-full h-full object-cover cursor-pointer">
+                        <button type="button" onclick="event.stopPropagation(); removeTravelPhoto(${idx})"
+                                title="刪除此照片"
+                                class="absolute top-1 right-1 w-6 h-6 rounded-full bg-cream-text/80 hover:bg-rose-600 text-white text-xs font-extrabold flex items-center justify-center shadow">
+                            ✕
+                        </button>
+                    </div>
+                `;
+            }).join('');
+
+            const addPhotoSlotHtml = photos.length < 3 ? `
+                <label class="aspect-square rounded-xl border-2 border-dashed border-cream-primary bg-cream-bg hover:bg-cream-secondary/30 flex flex-col items-center justify-center cursor-pointer transition p-2 text-center">
+                    <span class="text-2xl">📸</span>
+                    <span class="text-[11px] font-extrabold text-cream-primary mt-1">新增照片</span>
+                    <span class="text-[9px] text-cream-muted font-bold">可選 ${3 - photos.length} 張</span>
+                    <input type="file" accept="image/*" multiple onchange="handleTravelPhotoFileUpload(event)" class="hidden">
+                </label>
+            ` : '';
+
+            const addPhotoUrlBarHtml = photos.length < 3 ? `
+                <div class="flex gap-1.5 pt-1">
+                    <input type="url" id="travel-photo-url-input" placeholder="🔗 或貼上雲端圖片網址新增..."
+                           onkeydown="if(event.key==='Enter'){event.preventDefault(); addTravelPhotoByUrl();}"
+                           class="flex-1 px-2.5 py-1.5 text-xs rounded-xl border border-cream-border focus:border-cream-primary focus:outline-none">
+                    <button type="button" onclick="addTravelPhotoByUrl()"
+                            class="cream-btn bg-cream-secondary/50 hover:bg-cream-secondary px-3 py-1.5 text-xs font-extrabold shrink-0">
+                        ➕ 貼網址
+                    </button>
+                </div>
+            ` : '';
 
             const categoriesHtml = travel.checklist.map((cat, catIdx) => {
                 const catChecked = cat.items.filter(i => i.checked).length;
@@ -2819,7 +2903,7 @@
                         <button onclick="router.navigate('travel')" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold">
                             ⬅️ 返回列表
                         </button>
-                        <span class="text-xs font-extrabold text-cream-muted">🎒 行前準備清單</span>
+                        <span class="text-xs font-extrabold text-cream-muted">🎒 旅程相簿與行前清單</span>
                         <button onclick="toggleEditTravelMeta()" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold">
                             ${isEditingTravelMeta ? '✖️ 取消' : '✏️ 編輯資訊'}
                         </button>
@@ -2880,12 +2964,123 @@
                         </div>
                     </div>
 
+                    <!-- 旅程紀念照片（最多 3 張） -->
+                    <div class="bg-white cream-box p-4 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">📸 旅程紀念照片</h3>
+                            <span class="text-[11px] font-bold text-cream-muted bg-cream-secondary/30 px-2.5 py-0.5 rounded-full">
+                                ${photos.length} / 3 張
+                            </span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2.5">
+                            ${photoSlotsHtml}
+                            ${addPhotoSlotHtml}
+                        </div>
+                        ${addPhotoUrlBarHtml}
+                    </div>
+
                     <!-- 分類準備清單 -->
                     <div class="space-y-3">
                         ${categoriesHtml}
                     </div>
                 </div>
             `;
+        }
+
+        async function handleTravelPhotoFileUpload(event) {
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            if (!travel) return;
+            if (!Array.isArray(travel.photos)) travel.photos = [];
+
+            const files = Array.from(event.target.files || []);
+            if (files.length === 0) return;
+
+            const remain = 3 - travel.photos.length;
+            if (remain <= 0) {
+                showToast('⚠️ 每筆旅行紀錄最多只能上傳 3 張照片喔！');
+                return;
+            }
+
+            const selectedFiles = files.slice(0, remain);
+            if (files.length > remain) {
+                showToast(`📸 每筆旅行最多 3 張照片，已自動選取前 ${remain} 張`);
+            } else {
+                showToast(`⏳ 正在處理 ${selectedFiles.length} 張旅程照片...`);
+            }
+
+            let uploadedCount = 0;
+            for (const file of selectedFiles) {
+                try {
+                    const compressedBase64 = await compressImageFile(file, 720, 0.8);
+                    let finalUrl = compressedBase64;
+                    if (getActiveGasUrl()) {
+                        try {
+                            finalUrl = await uploadImageToCloudDrive(compressedBase64, 'travel');
+                        } catch (cloudErr) {
+                            console.warn('雲端上傳失敗，改以本機壓縮圖儲存：', cloudErr);
+                            showToast('⚠️ 雲端上傳失敗，已暫存於本機相簿');
+                        }
+                    }
+                    travel.photos.push(normalizeCloudImageUrl(finalUrl));
+                    uploadedCount++;
+                } catch (err) {
+                    console.error('照片處理失敗：', err);
+                }
+            }
+
+            event.target.value = '';
+            if (uploadedCount > 0) {
+                saveState();
+                showToast(`📸 已新增 ${uploadedCount} 張旅程照片！`);
+                renderView('travel_detail');
+            }
+        }
+
+        function addTravelPhotoByUrl() {
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            const input = document.getElementById('travel-photo-url-input');
+            if (!travel || !input) return;
+            if (!Array.isArray(travel.photos)) travel.photos = [];
+
+            if (travel.photos.length >= 3) {
+                showToast('⚠️ 每筆旅行紀錄最多只能放 3 張照片喔！');
+                return;
+            }
+
+            const rawUrl = input.value.trim();
+            if (!rawUrl) return;
+
+            travel.photos.push(normalizeCloudImageUrl(rawUrl));
+            saveState();
+            showToast('📸 已新增旅程照片！');
+            renderView('travel_detail');
+        }
+
+        function removeTravelPhoto(idx) {
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            if (!travel || !Array.isArray(travel.photos)) return;
+            travel.photos.splice(idx, 1);
+            saveState();
+            showToast('🗑️ 已移除該張照片');
+            renderView('travel_detail');
+        }
+
+        function openTravelPhotoPreviewModal(idx) {
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            if (!travel || !Array.isArray(travel.photos) || !travel.photos[idx]) return;
+
+            const photoUrl = normalizeCloudImageUrl(travel.photos[idx]);
+            const modalContent = document.getElementById('modal-content');
+            modalContent.innerHTML = `
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-sm sm:text-base font-extrabold text-cream-text">📸 ${escapeHtml(travel.name)}（第 ${idx + 1}/${travel.photos.length} 張）</h3>
+                    <button onclick="closeModal()" class="cream-btn px-3 py-1 bg-white text-xs font-bold">✕ 關閉</button>
+                </div>
+                <div class="rounded-2xl border-2 border-cream-text overflow-hidden bg-cream-secondary/20 flex items-center justify-center">
+                    <img src="${escapeHtml(photoUrl)}" alt="旅程照片預覽" class="w-full max-h-[65vh] object-contain">
+                </div>
+            `;
+            document.getElementById('modal-container').classList.remove('hidden');
         }
 
         function toggleNewTravelForm() {
@@ -2916,6 +3111,7 @@
                 startDate,
                 endDate,
                 type,
+                photos: [],
                 checklist
             };
 
@@ -2924,7 +3120,7 @@
             showNewTravelForm = false;
             isEditingTravelMeta = false;
             activeTravelId = newTravel.id;
-            showToast('✈️ 已建立旅遊紀錄，請開始勾選準備清單！');
+            showToast('✈️ 已建立旅遊紀錄，可上傳最多 3 張紀念照並勾選清單！');
             router.navigate('travel_detail');
         }
 
