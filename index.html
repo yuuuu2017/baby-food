@@ -233,6 +233,7 @@
             customIngredients: [],
             achievements: [],
             polaroids: {},
+            travels: [], 
             gasUrl: ""
         };
 
@@ -263,7 +264,7 @@
                     customIngredients: Array.isArray(parsed.customIngredients) ? parsed.customIngredients : [],
                     achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
                     polaroids: parsed.polaroids && typeof parsed.polaroids === 'object' ? parsed.polaroids : {},
-                    ingredientsGasUrl: resolvedGasUrl,
+                    travels: Array.isArray(parsed.travels) ? parsed.travels : [], // 👈 新增這一行
                     gasUrl: resolvedGasUrl
                 };
             } catch (e) {
@@ -271,6 +272,78 @@
                 return JSON.parse(JSON.stringify(DEFAULT_STATE));
             }
         }
+
+        // ==================== 旅行模組預設清單與狀態 ====================
+        const DAILY_OUTING_ITEMS = [
+            "奶粉/奶粉分裝瓶", "奶瓶/拋棄式奶瓶", "奶嘴頭*2~3", "涼水瓶",
+            "副食品食物泥／常溫寶寶粥", "寶寶餐具組", "矽膠圍兜", "備用口水巾",
+            "備用衣物", "髒衣收納袋", "濕紙巾", "衛生紙", "尿布"
+        ];
+
+        const TRAVEL_CHECKLIST_TEMPLATES = [
+            {
+                category: "🍼 飲食與副食品",
+                scope: "all",
+                items: [
+                    "奶粉、奶粉分裝瓶", "奶瓶", "拋棄式奶瓶", "奶嘴頭*2~3",
+                    "清潔劑分裝瓶", "涼水瓶", "副食品食物泥／常溫寶寶粥",
+                    "寶寶餐具組（軟質湯匙、食物剪刀、吸盤碗、果泥器）",
+                    "矽膠圍兜", "口水巾"
+                ]
+            },
+            {
+                category: "🧷 尿布與清潔護理",
+                scope: "all",
+                items: [
+                    "一般尿布(天數*5+2片備用)、夜用尿布(天數+2片備用)",
+                    "尿布墊", "濕紙巾（隨身包＋大包)", "衛生紙",
+                    "乾濕兩用巾(拋棄式)", "屁屁膏", "寶寶乳液、面霜",
+                    "防曬、防蚊液", "浴巾", "寶寶沐浴洗髮分裝瓶",
+                    "口腔清潔紗布／牙刷", "指甲剪", "棉花棒"
+                ]
+            },
+            {
+                category: "👕 衣物與睡眠安撫",
+                scope: "all",
+                items: [
+                    "換洗衣物（每日 2 套＋備用 1～2 套）",
+                    "外套／防風披風 ＋ 帽子、襪子", "睡墊", "防踢被/小被被",
+                    "安撫奶嘴（多帶 1 顆備用）＋ 隨身小玩具", "髒衣收納袋／夾鏈袋"
+                ]
+            },
+            {
+                category: "🩺 證件與隨身藥品",
+                scope: "all",
+                items: [
+                    "寶寶健保卡 ＋ 兒童健康手冊", "體溫計（耳溫槍／額溫槍）",
+                    "常備藥品（退燒藥水、腸胃藥、外傷藥膏、生理食鹽水）",
+                    "餵藥器/吸鼻器"
+                ]
+            },
+            {
+                category: "🚼 外出推車與裝備",
+                scope: "all",
+                items: [
+                    "嬰兒推車 ＋ 推車雨罩／蚊帳／涼墊",
+                    "揹巾（上下樓梯與安撫用）", "地墊", "隔音耳罩"
+                ]
+            },
+            {
+                category: "✈️ 國外旅遊專屬追加",
+                scope: "international",
+                items: [
+                    "寶寶護照 ＋ 簽證／入境申報資料",
+                    "護照大頭照備份（2 吋白底 2 張）",
+                    "常備藥品處方箋",
+                    "國際萬用轉接頭",
+                    "海外旅遊平安險"
+                ]
+            }
+        ];
+
+        let activeTravelId = null;
+        let showNewTravelForm = false;
+        let isEditingTravelMeta = false;
 
         let state = loadInitialState();
         let isCloudSyncing = false;
@@ -323,7 +396,8 @@
                 historyMap,
                 customIngredients: state.customIngredients || [],
                 achievements: state.achievements || [],
-                polaroids: safePolaroids
+                polaroids: safePolaroids,
+                travels: state.travels || []
             };
         }
 
@@ -384,6 +458,7 @@
             if (Array.isArray(cloudState.achievements)) {
                 state.achievements = cloudState.achievements;
             }
+            if (Array.isArray(cloudState.travels)) state.travels = cloudState.travels;
             if (cloudState.polaroids && typeof cloudState.polaroids === 'object') {
                 Object.keys(cloudState.polaroids).forEach(achId => {
                     const remoteP = cloudState.polaroids[achId];
@@ -854,6 +929,12 @@
                 case 'allergy':
                     container.innerHTML = renderAllergyView();
                     break;
+                case 'travel':
+                    container.innerHTML = renderTravelListView();
+                    break;
+                case 'travel_detail':
+                    container.innerHTML = renderTravelDetailView();
+                    break;
                 default:
                     container.innerHTML = renderHomeView();
             }
@@ -1004,39 +1085,88 @@
             }).join('');
 
             return `
-                <div class="flex flex-col items-center py-2 space-y-4">
-                    <div class="w-full flex items-center justify-center mb-2">
-                        <h2 class="text-base sm:text-lg font-extrabold">🗺️ 農場地圖</h2>
+                <div class="flex flex-col items-center py-2 space-y-3">
+                    <div class="w-full flex items-center justify-between mb-1">
+                        <button onclick="router.navigate('home')" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold flex items-center space-x-1">
+                            <span>⬅️ 返回首頁</span>
+                        </button>
+                        <h2 class="text-base sm:text-lg font-extrabold">🗺️ ${escapeHtml(state.owner.nameZh)}農場地圖</h2>
+                        <div class="w-16"></div>
                     </div>
 
-                    <div class="relative w-full max-w-md aspect-square bg-gradient-to-br from-cream-secondary/25 via-white to-cream-primary/15 cream-box flex items-center justify-center p-4 overflow-hidden">
-                        <div class="absolute w-[73%] h-[73%] rounded-full border-2 border-dashed border-cream-primary/30 pointer-events-none"></div>
-                        <div class="w-[70%] h-[70%] flex items-center justify-center pointer-events-none">
-                            ${getFarmPlanetSvg('w-full h-full drop-shadow-sm')}
+                    <!-- 外層共同定位區（不設 overflow-hidden，讓小飛機可以飛出星球框外） -->
+                    <div class="relative w-full max-w-md flex flex-col items-end">
+                        
+                        <!-- 1. 星球圓圈之外的「旅行」天空按鈕（放在星球框右上方） -->
+                        <div class="mb-2.5 flex items-center gap-2 z-10">
+                            <span class="text-[11px] text-sky-600/70 font-bold tracking-widest select-none">☁️ ┄┄┄ ✈️</span>
+                            <button onclick="moveCharacterAndGo(this, 'travel', {})"
+                                    class="bg-gradient-to-r from-sky-50 to-blue-50 hover:from-sky-100 hover:to-blue-100 border-2 border-sky-700 text-sky-950 rounded-2xl shadow-[3px_3px_0px_#0369a1] active:translate-x-[2px] active:translate-y-[2px] px-3.5 py-2 flex items-center space-x-2 transition">
+                                <span class="text-xl">✈️</span>
+                                <div class="text-left">
+                                    <div class="text-xs font-extrabold leading-tight">旅行</div>
+                                    <div class="text-[10px] text-sky-700 font-bold leading-tight">出遊紀錄 (${state.travels ? state.travels.length : 0})</div>
+                                </div>
+                            </button>
                         </div>
-                        <div id="farm-character" class="absolute z-20 flex flex-col items-center transition-all duration-500 ease-out pointer-events-none">
-                            ${avatarHtml}
+
+                        <!-- 2. 原本的圓形星球與六大區域軌道方框 -->
+                        <div class="relative w-full aspect-square bg-gradient-to-br from-cream-secondary/25 via-white to-cream-primary/15 cream-box flex items-center justify-center p-4">
+                            
+                            <!-- 軌道虛線輔助圓環 -->
+                            <div class="absolute w-[73%] h-[73%] rounded-full border-2 border-dashed border-cream-primary/30 pointer-events-none"></div>
+
+                            <!-- 中央農場星球插畫 -->
+                            <div class="w-[70%] h-[70%] flex items-center justify-center pointer-events-none">
+                                ${getFarmPlanetSvg('w-full h-full drop-shadow-sm')}
+                            </div>
+
+                            <!-- 正中央小人（z-30 確保飛出框外時不會被遮住，並內建隱藏的小飛機） -->
+                            <div id="farm-character" class="absolute z-30 flex flex-col items-center transition-all duration-700 ease-out pointer-events-none">
+                                <div class="relative flex items-center">
+                                    <!-- 點擊旅行時才會現身的小飛機 -->
+                                    <span id="character-airplane" class="hidden text-3xl -mr-2 drop-shadow-md animate-bounce">✈️</span>
+                                    ${avatarHtml}
+                                </div>
+                                <span class="bg-cream-text text-white text-[10px] px-2 py-0.5 rounded-full font-bold mt-1 shadow">${escapeHtml(state.owner.nameZh)}</span>
+                            </div>
+
+                            <!-- 原本的六大區域按鈕 -->
+                            ${zoneButtonsHtml}
                         </div>
-                        ${orbitButtonsHtml}
                     </div>
-                    <p class="text-xs text-cream-muted text-center">💡 點擊區域，前往探索。</p>
+
+                    <p class="text-xs text-cream-muted font-bold text-center">💡 點擊農場區域探索食材，或點擊右上角「✈️ 旅行」出發去旅遊！</p>
                 </div>
             `;
         }
 
-        function moveCharacterAndGo(btnElement, viewName, params) {
-            const char = document.getElementById('farm-character');
-            if (char && btnElement) {
-                const container = btnElement.parentElement;
-                const containerRect = container.getBoundingClientRect();
+        function moveCharacterAndGo(btnElement, viewName, params = {}) {
+            const charEl = document.getElementById('farm-character');
+            const planeEl = document.getElementById('character-airplane');
+            const isTravel = (viewName === 'travel');
+
+            if (charEl && btnElement) {
+                if (isTravel && planeEl) {
+                    planeEl.classList.remove('hidden');
+                    charEl.style.transition = 'transform 0.75s cubic-bezier(0.22, 1, 0.36, 1)';
+                } else {
+                    if (planeEl) planeEl.classList.add('hidden');
+                    charEl.style.transition = 'transform 0.5s ease-out';
+                }
+
                 const btnRect = btnElement.getBoundingClientRect();
-                const offsetX = (btnRect.left + btnRect.width / 2) - (containerRect.left + containerRect.width / 2);
-                const offsetY = (btnRect.top + btnRect.height / 2) - (containerRect.top + containerRect.height / 2);
-                char.style.transform = `translate(${offsetX * 0.58}px, ${offsetY * 0.58}px) scale(1.1)`;
+                const charRect = charEl.getBoundingClientRect();
+
+                const targetX = (btnRect.left + btnRect.width / 2) - (charRect.left + charRect.width / 2);
+                const targetY = (btnRect.top + btnRect.height / 2) - (charRect.top + charRect.height / 2);
+
+                charEl.style.transform = `translate(${targetX}px, ${targetY}px) scale(${isTravel ? 1.15 : 1.08})`;
             }
+
             setTimeout(() => {
                 router.navigate(viewName, params);
-            }, 420);
+            }, isTravel ? 750 : 500);
         }
 
         // 分區清單與卡片（上方純圖片橫幅，下方左側分區標題＋右側返回地圖按鈕）
@@ -2465,6 +2595,404 @@
             router.navigate('home');
             syncAllCloudData(false);
         });
+
+        // ==================== 旅行紀錄與準備清單功能 ====================
+        function renderTravelListView() {
+            const sortedTravels = [...state.travels].sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+
+            const dailyChipsHtml = DAILY_OUTING_ITEMS.map(item => `
+                <span class="inline-block bg-cream-secondary/35 text-cream-text text-[11px] font-bold px-2.5 py-1 rounded-full border border-cream-border">
+                    ${escapeHtml(item)}
+                </span>
+            `).join('');
+
+            const historyHtml = sortedTravels.length === 0
+                ? `<div class="bg-white/80 cream-box p-6 text-center text-xs text-cream-muted font-bold">
+                       🧳 目前還沒有旅遊紀錄，點擊上方「➕ 新增旅遊紀錄」開始規劃第一趟親子旅行吧！
+                   </div>`
+                : sortedTravels.map(t => {
+                    let total = 0, checked = 0;
+                    (t.checklist || []).forEach(cat => {
+                        cat.items.forEach(it => {
+                            total++;
+                            if (it.checked) checked++;
+                        });
+                    });
+                    const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+                    const typeBadge = t.type === 'international'
+                        ? `<span class="bg-sky-100 text-sky-800 border border-sky-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full">🌏 國外旅遊</span>`
+                        : `<span class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full">🚗 國內旅遊</span>`;
+                    const dateText = t.endDate && t.endDate !== t.startDate
+                        ? `${escapeHtml(t.startDate)} ～ ${escapeHtml(t.endDate)}`
+                        : escapeHtml(t.startDate || '未設定日期');
+
+                    return `
+                        <div onclick="openTravelDetail('${t.id}')" class="bg-white cream-box p-4 cursor-pointer hover:bg-cream-secondary/15 transition space-y-2.5">
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h3 class="font-extrabold text-sm sm:text-base text-cream-text">${escapeHtml(t.name)}</h3>
+                                        ${typeBadge}
+                                    </div>
+                                    <p class="text-xs text-cream-muted font-bold mt-1">📅 ${dateText}</p>
+                                </div>
+                                <button onclick="event.stopPropagation(); deleteTravelRecord('${t.id}')"
+                                        class="text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg border border-transparent hover:border-rose-200 font-bold"
+                                        title="刪除旅遊紀錄">🗑️</button>
+                            </div>
+                            <div class="space-y-1">
+                                <div class="flex justify-between text-[11px] font-bold text-cream-muted">
+                                    <span>🎒 打包進度</span>
+                                    <span>${checked} / ${total} 項 (${pct}%)</span>
+                                </div>
+                                <div class="w-full h-2 bg-cream-secondary/30 rounded-full overflow-hidden border border-cream-border">
+                                    <div class="h-full bg-cream-primary transition-all duration-300" style="width: ${pct}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            return `
+                <div class="space-y-4 max-w-2xl mx-auto">
+                    <!-- 頂部標題與返回按鈕 -->
+                    <div class="flex items-center justify-between">
+                        <button onclick="router.navigate('farm_map')" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold">
+                            🗺️ 返回地圖
+                        </button>
+                        <h2 class="text-base sm:text-lg font-extrabold text-cream-text">✈️ ${escapeHtml(state.owner.nameZh)}的旅行紀錄</h2>
+                        <div class="w-16"></div>
+                    </div>
+
+                    <!-- 日常出門必帶清單（純條列防呆，不需勾選） -->
+                    <div class="bg-white cream-box p-4 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">👜 日常出門必帶清單（隨身快查）</h3>
+                            <span class="text-[10px] text-cream-muted font-bold">出門前掃一眼</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 pt-1">
+                            ${dailyChipsHtml}
+                        </div>
+                    </div>
+
+                    <!-- 新增旅遊紀錄按鈕與展開表單 -->
+                    <div class="space-y-3">
+                        <button onclick="toggleNewTravelForm()" class="w-full cream-btn bg-cream-primary text-white py-2.5 text-sm font-extrabold flex items-center justify-center gap-1.5">
+                            <span>${showNewTravelForm ? '✖️ 取消新增' : '➕ 新增旅遊紀錄'}</span>
+                        </button>
+
+                        ${showNewTravelForm ? `
+                            <form onsubmit="handleCreateTravel(event)" class="bg-white cream-box p-4 space-y-3 border-2 border-cream-primary">
+                                <h3 class="text-sm font-extrabold text-cream-text">📝 建立新旅程（儲存後自動進入準備清單）</h3>
+                                <div>
+                                    <label class="block text-xs font-bold text-cream-text mb-1">旅行名稱 *</label>
+                                    <input type="text" id="travel-name-input" required placeholder="例如：宜蘭兩天一夜、沖繩親子遊"
+                                           class="w-full px-3 py-2 text-sm rounded-xl border-2 border-cream-border focus:border-cream-primary focus:outline-none">
+                                </div>
+                                <div class="grid grid-cols-2 gap-2.5">
+                                    <div>
+                                        <label class="block text-xs font-bold text-cream-text mb-1">出發日期 *</label>
+                                        <input type="date" id="travel-start-input" required value="${todayStr}"
+                                               class="w-full px-3 py-2 text-xs rounded-xl border-2 border-cream-border focus:border-cream-primary focus:outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-cream-text mb-1">回程日期</label>
+                                        <input type="date" id="travel-end-input" value="${todayStr}"
+                                               class="w-full px-3 py-2 text-xs rounded-xl border-2 border-cream-border focus:border-cream-primary focus:outline-none">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-cream-text mb-1">旅遊類型 *</label>
+                                    <div class="grid grid-cols-2 gap-2.5">
+                                        <label class="cursor-pointer">
+                                            <input type="radio" name="travel-type" value="domestic" checked class="peer hidden">
+                                            <div class="text-center py-2 px-3 rounded-xl border-2 border-cream-border peer-checked:border-cream-primary peer-checked:bg-cream-secondary/40 text-xs font-extrabold">
+                                                🚗 國內旅遊
+                                            </div>
+                                        </label>
+                                        <label class="cursor-pointer">
+                                            <input type="radio" name="travel-type" value="international" class="peer hidden">
+                                            <div class="text-center py-2 px-3 rounded-xl border-2 border-cream-border peer-checked:border-cream-primary peer-checked:bg-cream-secondary/40 text-xs font-extrabold">
+                                                🌏 國外旅遊（含出國清單）
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <button type="submit" class="w-full cream-btn bg-cream-primary text-white py-2.5 text-sm font-extrabold">
+                                    ✅ 建立並跳轉至準備清單
+                                </button>
+                            </form>
+                        ` : ''}
+                    </div>
+
+                    <!-- 歷史旅遊紀錄列表 -->
+                    <div class="space-y-2.5">
+                        <h3 class="text-xs sm:text-sm font-extrabold text-cream-text px-1">📚 歷史旅遊紀錄（點擊進入勾選清單）</h3>
+                        ${historyHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTravelDetailView() {
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            if (!travel) {
+                return `<div class="text-center py-8 space-y-3">
+                    <p class="text-sm font-bold text-cream-muted">找不到該筆旅遊紀錄</p>
+                    <button onclick="router.navigate('travel')" class="cream-btn bg-white px-4 py-2 text-xs font-bold">⬅️ 返回旅行列表</button>
+                </div>`;
+            }
+
+            let total = 0, checked = 0;
+            travel.checklist.forEach(cat => {
+                cat.items.forEach(it => {
+                    total++;
+                    if (it.checked) checked++;
+                });
+            });
+            const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+            const dateText = travel.endDate && travel.endDate !== travel.startDate
+                ? `${escapeHtml(travel.startDate)} ～ ${escapeHtml(travel.endDate)}`
+                : escapeHtml(travel.startDate || '未設定日期');
+
+            const categoriesHtml = travel.checklist.map((cat, catIdx) => {
+                const catChecked = cat.items.filter(i => i.checked).length;
+                const itemsHtml = cat.items.map((item, itemIdx) => `
+                    <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded-xl hover:bg-cream-secondary/20 transition">
+                        <label class="flex items-start gap-2.5 cursor-pointer flex-1 select-none">
+                            <input type="checkbox" ${item.checked ? 'checked' : ''}
+                                   onchange="toggleTravelCheckItem(${catIdx}, ${itemIdx})"
+                                   class="mt-0.5 w-4 h-4 accent-[#A3704C] rounded cursor-pointer shrink-0">
+                            <span class="text-xs sm:text-sm font-bold leading-snug ${item.checked ? 'line-through text-cream-muted' : 'text-cream-text'}">
+                                ${escapeHtml(item.text)}
+                            </span>
+                        </label>
+                        <button onclick="deleteTravelChecklistItem(${catIdx}, ${itemIdx})"
+                                class="text-[11px] text-cream-muted hover:text-rose-500 px-1.5 shrink-0" title="刪除此項目">✕</button>
+                    </div>
+                `).join('');
+
+                return `
+                    <div class="bg-white cream-box p-4 space-y-2">
+                        <div class="flex items-center justify-between border-b border-cream-border pb-2">
+                            <h4 class="text-xs sm:text-sm font-extrabold text-cream-text">${escapeHtml(cat.category)}</h4>
+                            <span class="text-[11px] font-bold text-cream-muted bg-cream-secondary/30 px-2 py-0.5 rounded-full">
+                                ${catChecked} / ${cat.items.length}
+                            </span>
+                        </div>
+                        <div class="divide-y divide-cream-border/40">
+                            ${itemsHtml}
+                        </div>
+                        <div class="pt-2 flex gap-1.5">
+                            <input type="text" id="add-item-input-${catIdx}" placeholder="在此分類新增自訂項目..."
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault(); addCustomTravelChecklistItem(${catIdx});}"
+                                   class="flex-1 px-2.5 py-1.5 text-xs rounded-xl border border-cream-border focus:border-cream-primary focus:outline-none">
+                            <button onclick="addCustomTravelChecklistItem(${catIdx})"
+                                    class="cream-btn bg-cream-secondary/50 hover:bg-cream-secondary px-3 py-1.5 text-xs font-extrabold shrink-0">
+                                ➕ 新增
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="space-y-4 max-w-2xl mx-auto">
+                    <!-- 頂部導覽 -->
+                    <div class="flex items-center justify-between">
+                        <button onclick="router.navigate('travel')" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold">
+                            ⬅️ 返回列表
+                        </button>
+                        <span class="text-xs font-extrabold text-cream-muted">🎒 行前準備清單</span>
+                        <button onclick="toggleEditTravelMeta()" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold">
+                            ${isEditingTravelMeta ? '✖️ 取消' : '✏️ 編輯資訊'}
+                        </button>
+                    </div>
+
+                    <!-- 旅程資訊與進度卡片（支援切換編輯名稱、日期、國內外） -->
+                    <div class="bg-white cream-box p-4 space-y-3">
+                        ${isEditingTravelMeta ? `
+                            <form onsubmit="handleUpdateTravelMeta(event)" class="space-y-2.5">
+                                <div>
+                                    <label class="block text-xs font-bold mb-1">旅行名稱</label>
+                                    <input type="text" id="edit-travel-name" required value="${escapeHtml(travel.name)}"
+                                           class="w-full px-3 py-1.5 text-sm rounded-xl border-2 border-cream-border">
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-xs font-bold mb-1">出發日期</label>
+                                        <input type="date" id="edit-travel-start" required value="${escapeHtml(travel.startDate || '')}"
+                                               class="w-full px-2.5 py-1.5 text-xs rounded-xl border-2 border-cream-border">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold mb-1">回程日期</label>
+                                        <input type="date" id="edit-travel-end" value="${escapeHtml(travel.endDate || '')}"
+                                               class="w-full px-2.5 py-1.5 text-xs rounded-xl border-2 border-cream-border">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold mb-1">旅遊類型</label>
+                                    <select id="edit-travel-type" class="w-full px-3 py-1.5 text-xs rounded-xl border-2 border-cream-border bg-white font-bold">
+                                        <option value="domestic" ${travel.type === 'domestic' ? 'selected' : ''}>🚗 國內旅遊</option>
+                                        <option value="international" ${travel.type === 'international' ? 'selected' : ''}>🌏 國外旅遊</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="w-full cream-btn bg-cream-primary text-white py-2 text-xs font-extrabold">
+                                    💾 儲存旅程資訊
+                                </button>
+                            </form>
+                        ` : `
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                <div>
+                                    <h2 class="text-base sm:text-lg font-extrabold text-cream-text">${escapeHtml(travel.name)}</h2>
+                                    <p class="text-xs text-cream-muted font-bold mt-0.5">📅 ${dateText}</p>
+                                </div>
+                                <span class="text-xs font-extrabold px-3 py-1 rounded-full border ${travel.type === 'international' ? 'bg-sky-100 text-sky-800 border-sky-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'}">
+                                    ${travel.type === 'international' ? '🌏 國外旅遊' : '🚗 國內旅遊'}
+                                </span>
+                            </div>
+                        `}
+
+                        <div class="space-y-1 pt-1">
+                            <div class="flex justify-between text-xs font-extrabold text-cream-text">
+                                <span>已準備完成</span>
+                                <span>${checked} / ${total} 項 (${pct}%)</span>
+                            </div>
+                            <div class="w-full h-2.5 bg-cream-secondary/30 rounded-full overflow-hidden border border-cream-border">
+                                <div class="h-full bg-cream-primary transition-all duration-300" style="width: ${pct}%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 分類準備清單 -->
+                    <div class="space-y-3">
+                        ${categoriesHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleNewTravelForm() {
+            showNewTravelForm = !showNewTravelForm;
+            renderView('travel');
+        }
+
+        function handleCreateTravel(event) {
+            event.preventDefault();
+            const name = document.getElementById('travel-name-input').value.trim();
+            const startDate = document.getElementById('travel-start-input').value;
+            const endDate = document.getElementById('travel-end-input').value || startDate;
+            const typeEl = document.querySelector('input[name="travel-type"]:checked');
+            const type = typeEl ? typeEl.value : 'domestic';
+
+            if (!name) return;
+
+            const checklist = TRAVEL_CHECKLIST_TEMPLATES
+                .filter(tpl => tpl.scope === 'all' || (type === 'international' && tpl.scope === 'international'))
+                .map(tpl => ({
+                    category: tpl.category,
+                    items: tpl.items.map(text => ({ text, checked: false }))
+                }));
+
+            const newTravel = {
+                id: 'travel_' + Date.now(),
+                name,
+                startDate,
+                endDate,
+                type,
+                checklist
+            };
+
+            state.travels.push(newTravel);
+            saveState();
+            showNewTravelForm = false;
+            isEditingTravelMeta = false;
+            activeTravelId = newTravel.id;
+            showToast('✈️ 已建立旅遊紀錄，請開始勾選準備清單！');
+            router.navigate('travel_detail');
+        }
+
+        function openTravelDetail(travelId) {
+            activeTravelId = travelId;
+            isEditingTravelMeta = false;
+            router.navigate('travel_detail');
+        }
+
+        function toggleEditTravelMeta() {
+            isEditingTravelMeta = !isEditingTravelMeta;
+            renderView('travel_detail');
+        }
+
+        function handleUpdateTravelMeta(event) {
+            event.preventDefault();
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            if (!travel) return;
+
+            const newName = document.getElementById('edit-travel-name').value.trim();
+            const newStart = document.getElementById('edit-travel-start').value;
+            const newEnd = document.getElementById('edit-travel-end').value || newStart;
+            const newType = document.getElementById('edit-travel-type').value;
+
+            if (newName) travel.name = newName;
+            travel.startDate = newStart;
+            travel.endDate = newEnd;
+
+            // 若從國內改成國外且尚未包含國外專屬分類，自動補上
+            if (travel.type !== 'international' && newType === 'international') {
+                const intlTpl = TRAVEL_CHECKLIST_TEMPLATES.find(tpl => tpl.scope === 'international');
+                if (intlTpl && !travel.checklist.some(c => c.category === intlTpl.category)) {
+                    travel.checklist.push({
+                        category: intlTpl.category,
+                        items: intlTpl.items.map(text => ({ text, checked: false }))
+                    });
+                }
+            }
+            travel.type = newType;
+
+            saveState();
+            isEditingTravelMeta = false;
+            showToast('✅ 已更新旅程資訊！');
+            renderView('travel_detail');
+        }
+
+        function toggleTravelCheckItem(catIdx, itemIdx) {
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            if (!travel || !travel.checklist[catIdx] || !travel.checklist[catIdx].items[itemIdx]) return;
+            travel.checklist[catIdx].items[itemIdx].checked = !travel.checklist[catIdx].items[itemIdx].checked;
+            saveState();
+            renderView('travel_detail');
+        }
+
+        function addCustomTravelChecklistItem(catIdx) {
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            const input = document.getElementById(`add-item-input-${catIdx}`);
+            if (!travel || !input) return;
+            const text = input.value.trim();
+            if (!text) return;
+
+            travel.checklist[catIdx].items.push({ text, checked: false });
+            saveState();
+            renderView('travel_detail');
+        }
+
+        function deleteTravelChecklistItem(catIdx, itemIdx) {
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            if (!travel || !travel.checklist[catIdx]) return;
+            travel.checklist[catIdx].items.splice(itemIdx, 1);
+            saveState();
+            renderView('travel_detail');
+        }
+
+        function deleteTravelRecord(travelId) {
+            if (!confirm('確定要刪除這筆旅遊紀錄與準備清單嗎？')) return;
+            state.travels = state.travels.filter(t => t.id !== travelId);
+            saveState();
+            showToast('🗑️ 已刪除旅遊紀錄');
+            renderView('travel');
+        }
+        
     </script>
 </body>
 </html>
