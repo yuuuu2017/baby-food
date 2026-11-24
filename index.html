@@ -264,7 +264,7 @@
                     customIngredients: Array.isArray(parsed.customIngredients) ? parsed.customIngredients : [],
                     achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
                     polaroids: parsed.polaroids && typeof parsed.polaroids === 'object' ? parsed.polaroids : {},
-                    travels: Array.isArray(parsed.travels) ? parsed.travels : [], // 👈 新增這一行
+                    travels: Array.isArray(parsed.travels) ? parsed.travels : [],
                     gasUrl: resolvedGasUrl
                 };
             } catch (e) {
@@ -645,7 +645,6 @@
         ];
 
         // ==================== 3. 輔助計算函式 ====================
-        // 通用關鍵字比對工具：同時檢查 id、name（中文）、nameEn（英文）
         function matchIngredient(ing, keywords) {
             const idStr = String(ing.id || '').toLowerCase().trim();
             const nameStr = String(ing.name || '').trim();
@@ -656,13 +655,11 @@
             });
         }
 
-        // 檢查特定關鍵字食材是否已解鎖（吃滿 3 次）
         function isUnlockedByKeywords(s, keywords) {
             const allIngs = [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
             return allIngs.some(ing => matchIngredient(ing, keywords) && ing.history && ing.history.length >= 3);
         }
 
-        // 【卜派愛吃菜】解鎖農田區的「菠菜」（吃滿 3 次）
         const POPEYE_SECRET_KEYWORDS = ['菠菜', 'spinach'];
         function hasEatenFarmVeggie(s) {
             const allIngs = [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
@@ -673,17 +670,14 @@
             );
         }
 
-        // 【蛋蛋的幸福】解鎖蛋黃（或雞蛋）
         function hasUnlockedEgg(s) {
             return isUnlockedByKeywords(s, ['蛋黃', '雞蛋', 'egg yolk', 'egg_yolk', 'egg']);
         }
 
-        // 計算官方圖鑑已解鎖數量（用於頂端進度條與資深小農夫成就）
         function getOfficialUnlockedCount() {
             return Object.values(state.ingredients || {}).filter(ing => ing.history && ing.history.length >= 3).length;
         }
 
-        // 計算全部已解鎖食材總數（包含官方圖鑑 + 自訂食材）
         function getUnlockedCount() {
             const allIngs = [...Object.values(state.ingredients || {}), ...(state.customIngredients || [])];
             return allIngs.filter(ing => ing.history && ing.history.length >= 3).length;
@@ -1094,10 +1088,10 @@
                         <div class="w-16"></div>
                     </div>
 
-                    <!-- 外層共同定位區（不設 overflow-hidden，讓小飛機可以飛出星球框外） -->
+                    <!-- 外層共同定位區 -->
                     <div class="relative w-full max-w-md flex flex-col items-end">
                         
-                        <!-- 1. 星球圓圈之外的「旅行」天空按鈕（放在星球框右上方） -->
+                        <!-- 1. 星球圓圈之外的「旅行」天空按鈕 -->
                         <div class="mb-2.5 flex items-center gap-2 z-10">
                             <span class="text-[11px] text-sky-600/70 font-bold tracking-widest select-none">☁️ ┄┄┄ ✈️</span>
                             <button onclick="moveCharacterAndGo(this, 'travel', {})"
@@ -1110,7 +1104,7 @@
                             </button>
                         </div>
 
-                        <!-- 2. 原本的圓形星球與六大區域軌道方框 -->
+                        <!-- 2. 圓形星球與六大區域軌道方框 -->
                         <div class="relative w-full aspect-square bg-gradient-to-br from-cream-secondary/25 via-white to-cream-primary/15 cream-box flex items-center justify-center p-4">
                             
                             <!-- 軌道虛線輔助圓環 -->
@@ -1121,18 +1115,17 @@
                                 ${getFarmPlanetSvg('w-full h-full drop-shadow-sm')}
                             </div>
 
-                            <!-- 正中央小人（z-30 確保飛出框外時不會被遮住，並內建隱藏的小飛機） -->
+                            <!-- 正中央小人 -->
                             <div id="farm-character" class="absolute z-30 flex flex-col items-center transition-all duration-700 ease-out pointer-events-none">
                                 <div class="relative flex items-center">
-                                    <!-- 點擊旅行時才會現身的小飛機 -->
                                     <span id="character-airplane" class="hidden text-3xl -mr-2 drop-shadow-md animate-bounce">✈️</span>
                                     ${avatarHtml}
                                 </div>
                                 <span class="bg-cream-text text-white text-[10px] px-2 py-0.5 rounded-full font-bold mt-1 shadow">${escapeHtml(state.owner.nameZh)}</span>
                             </div>
 
-                            <!-- 原本的六大區域按鈕 -->
-                            ${zoneButtonsHtml}
+                            <!-- 六大區域按鈕（已修正變數名稱） -->
+                            ${orbitButtonsHtml}
                         </div>
                     </div>
 
@@ -1169,7 +1162,7 @@
             }, isTravel ? 750 : 500);
         }
 
-        // 分區清單與卡片（上方純圖片橫幅，下方左側分區標題＋右側返回地圖按鈕）
+        // 分區清單與卡片
         function renderSectionView(category) {
             const catMeta = {
                 'farm': { title: '🌾 農田區（五穀/蔬菜）', desc: '第一次播種，第二次澆水，第三次豐收！', bannerUrl: '', fallbackBg: 'from-emerald-100 via-amber-50 to-lime-100' },
@@ -1624,7 +1617,6 @@
             });
         }
 
-        // 共用函式：將壓縮後的 Base64 圖片上傳至 Google 雲端硬碟並取得公開直連網址
         async function uploadImageToCloudDrive(base64DataUrl, prefix = 'photo') {
             const targetUrl = getActiveGasUrl();
             if (!targetUrl) return base64DataUrl;
@@ -1946,7 +1938,7 @@
                             </button>
                         </form>
 
-                        <!-- 單一 Google 試算表 (GAS) 雲端同步區塊（預設留空不連線） -->
+                        <!-- 單一 Google 試算表 (GAS) 雲端同步區塊 -->
                         <div class="border-t-2 border-dashed border-cream-text/30 pt-4 mt-4 space-y-2.5">
                             <div class="flex items-center justify-between">
                                 <h4 class="font-extrabold text-xs text-cream-text">☁️ Google 試算表 (GAS) 雲端同步</h4>
@@ -2048,14 +2040,12 @@
             ];
 
             let filtered = allItems.filter(item => {
-                // 1. 農場分區 / 自訂篩選
                 if (encFilterCat === 'custom') {
                     if (!item.isCustom) return false;
                 } else if (encFilterCat !== 'all' && item.category !== encFilterCat) {
                     return false;
                 }
 
-                // 2. 狀態與過敏篩選
                 const triedCount = item.history.length;
                 const latestReaction = triedCount > 0 ? item.history[item.history.length - 1].reaction : null;
 
@@ -2090,7 +2080,6 @@
                     : item.seedEmoji;
                 let bgClass = isUnlocked ? "bg-emerald-50/70 border-emerald-500" : "bg-white border-cream-text";
 
-                // 只有自訂食材才會顯示刪除按鈕，官方圖鑑絕對不會顯示
                 const deleteBtnHtml = item.isCustom ? `
                     <button type="button"
                             onclick="event.stopPropagation(); confirmDeleteCustomIngredient('${item.id}')"
@@ -2123,7 +2112,6 @@
                         <h2 class="text-base sm:text-lg font-extrabold">📖 ${escapeHtml(state.owner.nameZh)}農場食材總圖鑑</h2>
                     </div>
 
-                    <!-- 篩選器第一列：農場分類 -->
                     <div class="bg-white cream-box p-3 space-y-2">
                         <div class="text-xs font-extrabold text-cream-muted">🌾 農場分區篩選：</div>
                         <div class="flex flex-wrap gap-1.5">
@@ -2131,7 +2119,6 @@
                         </div>
                     </div>
 
-                    <!-- 篩選器第二列：嚐試狀態與過敏 -->
                     <div class="bg-white cream-box p-3 space-y-2">
                         <div class="text-xs font-extrabold text-cream-muted">🔍 狀態與過敏篩選：</div>
                         <div class="flex flex-wrap gap-1.5">
@@ -2148,7 +2135,7 @@
 
         function confirmDeleteCustomIngredient(customId) {
             const target = state.customIngredients.find(i => i.id === customId);
-            if (!target) return; // 官方圖鑑食材直接阻擋，無法刪除
+            if (!target) return;
 
             const recordCount = target.history ? target.history.length : 0;
             const modalContent = document.getElementById('modal-content');
@@ -2653,7 +2640,7 @@
                     `;
                 }).join('');
 
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = getLocalDateStr();
 
             return `
                 <div class="space-y-4 max-w-2xl mx-auto">
@@ -2666,7 +2653,7 @@
                         <div class="w-16"></div>
                     </div>
 
-                    <!-- 日常出門必帶清單（純條列防呆，不需勾選） -->
+                    <!-- 日常出門必帶清單 -->
                     <div class="bg-white cream-box p-4 space-y-2">
                         <div class="flex items-center justify-between">
                             <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">👜 日常出門必帶清單（隨身快查）</h3>
@@ -2811,7 +2798,7 @@
                         </button>
                     </div>
 
-                    <!-- 旅程資訊與進度卡片（支援切換編輯名稱、日期、國內外） -->
+                    <!-- 旅程資訊與進度卡片 -->
                     <div class="bg-white cream-box p-4 space-y-3">
                         ${isEditingTravelMeta ? `
                             <form onsubmit="handleUpdateTravelMeta(event)" class="space-y-2.5">
@@ -2939,7 +2926,6 @@
             travel.startDate = newStart;
             travel.endDate = newEnd;
 
-            // 若從國內改成國外且尚未包含國外專屬分類，自動補上
             if (travel.type !== 'international' && newType === 'international') {
                 const intlTpl = TRAVEL_CHECKLIST_TEMPLATES.find(tpl => tpl.scope === 'international');
                 if (intlTpl && !travel.checklist.some(c => c.category === intlTpl.category)) {
@@ -2992,7 +2978,6 @@
             showToast('🗑️ 已刪除旅遊紀錄');
             renderView('travel');
         }
-        
     </script>
 </body>
 </html>
