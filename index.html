@@ -119,13 +119,19 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
-        /* 修正手機版日期選擇框超出容器的問題 */
+        /* 修正手機版（特別是 iOS Safari / LINE 瀏覽器）日期選擇框超出容器的問題 */
         input[type="date"] {
+            -webkit-appearance: none;
+            appearance: none;
             display: block;
             width: 100%;
             max-width: 100%;
             min-width: 0;
+            min-height: 2.375rem;
             box-sizing: border-box;
+        }
+        input[type="date"]::-webkit-date-and-time-value {
+            text-align: left;
         }
     </style>
 </head>
@@ -1738,12 +1744,12 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="min-w-0">
                             <label class="block text-xs font-bold mb-1">食用日期</label>
                             <input type="date" id="quick-date" value="${getLocalDateStr()}" required class="block w-full min-w-0 max-w-full box-border p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
                         </div>
-                        <div>
+                        <div class="min-w-0">
                             <label class="block text-xs font-bold mb-1">份量 (非必填)</label>
                             <input type="text" id="quick-amount" placeholder="例如：50ml" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white">
                         </div>
@@ -2401,12 +2407,12 @@
                                             <span class="font-extrabold text-sm text-cream-text">✏️ 編輯：${escapeHtml(r.ingredientName)} (第 ${r.historyIndex + 1} 次)</span>
                                             <button type="button" onclick="cancelEditHistoryRecord()" class="text-xs font-bold text-cream-muted underline">取消</button>
                                         </div>
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <div class="min-w-0">
                                                 <label class="block text-[11px] font-bold mb-0.5">日期</label>
                                                 <input type="date" id="edit-rec-date" value="${r.date}" required class="block w-full min-w-0 max-w-full box-border p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
                                             </div>
-                                            <div>
+                                            <div class="min-w-0">
                                                 <label class="block text-[11px] font-bold mb-0.5">份量</label>
                                                 <input type="text" id="edit-rec-amount" value="${escapeHtml(r.amount || '')}" placeholder="如：30ml" class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white">
                                             </div>
