@@ -1194,12 +1194,12 @@
 
             let html = `
                 <div class="space-y-4">
-                    <div class="relative w-full h-36 sm:h-44 rounded-2xl overflow-hidden shadow-sm bg-gradient-to-br ${meta.fallbackBg} flex items-center justify-center">
+                    <div class="relative w-full rounded-2xl overflow-hidden shadow-sm bg-gradient-to-br ${meta.fallbackBg} flex items-center justify-center">
                         ${normalizedBannerUrl ? `
                             <img src="${normalizedBannerUrl}" alt="${escapeHtml(meta.title)}"
-                                 onerror="this.style.display='none';"
-                                 class="absolute inset-0 w-full h-full object-cover">
-                        ` : ''}
+                                 onerror="this.style.display='none'; this.parentElement.classList.add('h-44');"
+                                 class="w-full h-auto block">
+                        ` : '<div class="h-44"></div>'}
                     </div>
                     <div class="flex items-center justify-between gap-2 px-1">
                         <h2 class="text-base sm:text-lg font-extrabold text-cream-text text-left">${meta.title}</h2>
@@ -1514,11 +1514,12 @@
                     </div>
 
                     <div class="flex items-center justify-between gap-2 px-1">
-                        <div class="flex items-center space-x-2">
-                            <h2 class="text-base sm:text-lg font-extrabold text-cream-text text-left">🏠 農舍成就寫真牆</h2>
-                            <span class="bg-cream-primary text-white text-xs font-extrabold px-2.5 py-0.5 rounded-full border-2 border-cream-text shadow-sm">
-                                ${unlockedTotal}/${totalCount}
-                            </span>
+                        <div class="relative w-full rounded-2xl overflow-hidden shadow-sm bg-gradient-to-br from-amber-100 via-orange-50 to-cream-secondary/40 flex items-center justify-center">
+                            ${cottageBannerUrl ? `
+                                <img src="${cottageBannerUrl}" alt="農舍成就寫真牆"
+                                     onerror="this.style.display='none'; this.parentElement.classList.add('h-44');"
+                                     class="w-full h-auto block">
+                            ` : '<div class="h-44"></div>'}
                         </div>
                         <button onclick="router.navigate('farm_map')" class="shrink-0 cream-btn bg-white hover:bg-cream-secondary/40 px-3 py-1.5 text-xs font-bold">
                             🗺️ 返回地圖
