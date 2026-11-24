@@ -119,6 +119,14 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        /* 修正手機版日期選擇框超出容器的問題 */
+        input[type="date"] {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col pb-24 select-none">
