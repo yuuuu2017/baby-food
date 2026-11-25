@@ -1096,12 +1096,12 @@
                 : `<div class="w-12 h-12 rounded-full border-2 border-cream-text bg-cream-yellow flex items-center justify-center text-2xl shadow-md">👶</div>`;
 
             const orbitZones = [
-                { id: 'farm', action: "moveCharacterAndGo(this, 'section', {category: 'farm'})", icon: '🌾', title: '農田區', sub: '五穀/蔬菜', angleDeg: 95 },
-                { id: 'cottage', action: "moveCharacterAndGo(this, 'cottage', {})", icon: '🏠', title: '農舍', sub: `成就 ${state.achievements.length}/${ACHIEVEMENTS_LIST.length}`, angleDeg: 35 },
-                { id: 'greenhouse', action: "moveCharacterAndGo(this, 'section', {category: 'greenhouse'})", icon: '🪵', title: '溫室', sub: '菇類', angleDeg: 335 },
-                { id: 'pasture', action: "moveCharacterAndGo(this, 'section', {category: 'pasture'})", icon: '🥩', title: '牧場區', sub: '蛋白質/肉類', angleDeg: 275 },
-                { id: 'fish', action: "moveCharacterAndGo(this, 'section', {category: 'fish'})", icon: '🐟', title: '魚池', sub: '魚類/海鮮', angleDeg: 215 },
-                { id: 'orchard', action: "moveCharacterAndGo(this, 'section', {category: 'orchard'})", icon: '🌳', title: '果樹區', sub: '水果', angleDeg: 155 }
+                { id: 'farm', action: "moveCharacterAndGo(this, 'section', {category: 'farm'})", icon: '🌾', title: '農田區', sub: '五穀/蔬菜', angleDeg: 115 },
+                { id: 'cottage', action: "moveCharacterAndGo(this, 'cottage', {})", icon: '🏠', title: '農舍', sub: `成就 ${state.achievements.length}/${ACHIEVEMENTS_LIST.length}`, angleDeg: 55 },
+                { id: 'greenhouse', action: "moveCharacterAndGo(this, 'section', {category: 'greenhouse'})", icon: '🪵', title: '溫室', sub: '菇類', angleDeg: 355 },
+                { id: 'pasture', action: "moveCharacterAndGo(this, 'section', {category: 'pasture'})", icon: '🥩', title: '牧場區', sub: '蛋白質/肉類', angleDeg: 295 },
+                { id: 'fish', action: "moveCharacterAndGo(this, 'section', {category: 'fish'})", icon: '🐟', title: '魚池', sub: '魚類/海鮮', angleDeg: 235 },
+                { id: 'orchard', action: "moveCharacterAndGo(this, 'section', {category: 'orchard'})", icon: '🌳', title: '果樹區', sub: '水果', angleDeg: 175 }
             ];
 
             const orbitRadiusPct = 36;
@@ -1170,7 +1170,7 @@
                         </div>
                     </div>
 
-                    <p class="text-xs text-cream-muted font-bold text-center">💡 點擊農場區域探索食材，或點擊右上角「✈️ 旅行」出發去旅遊！</p>
+                    <p class="text-xs text-cream-muted font-bold text-center">💡 點擊農場區域探索食材，或點擊右上角出發去旅遊！</p>
                 </div>
             `;
         }
@@ -1552,7 +1552,7 @@
                         </button>
                     </div>
 
-                    <p class="text-xs text-cream-muted text-center bg-white/70 py-1.5 px-3 rounded-full border border-cream-border">✨ 達成農場成就即可解鎖上傳功能，為寶寶留下立可拍紀念照！</p>
+                    <p class="text-xs text-cream-muted text-center bg-white/70 py-1.5 px-3 rounded-full border border-cream-border">✨ 達成農場成就即可解鎖上傳功能，為寶寶留下紀念照！</p>
 
                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-1">
             `;
@@ -1596,7 +1596,7 @@
             const modalContent = document.getElementById('modal-content');
             modalContent.innerHTML = `
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-base sm:text-lg font-extrabold">📸 編輯立可拍紀念照</h3>
+                    <h3 class="text-base sm:text-lg font-extrabold">📸 編輯紀念照</h3>
                     <button onclick="closeModal()" class="cream-btn px-3 py-1 bg-white text-xs font-bold">✕ 關閉</button>
                 </div>
                 <div class="bg-cream-yellow/40 p-3 rounded-xl border border-cream-text/20 mb-4 text-center">
@@ -1605,7 +1605,7 @@
                 </div>
                 <form onsubmit="savePolaroid(event, '${achId}')" class="space-y-3">
                     <div>
-                        <label class="block text-xs font-bold mb-1">📱 從手機相簿選擇照片 (自動壓縮)</label>
+                        <label class="block text-xs font-bold mb-1">📱 從手機相簿選擇照片</label>
                         <input type="file" id="polaroid-file-input" accept="image/*" onchange="handlePolaroidFileUpload(event)"
                             class="w-full p-2 border-2 border-dashed border-cream-primary rounded-xl text-xs bg-white file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cream-primary file:text-white hover:file:bg-cream-primary/90">
                     </div>
@@ -1623,7 +1623,7 @@
                         <label class="block text-xs font-bold mb-1">達成紀念日期</label>
                         <input type="date" id="polaroid-date" value="${currentData.date}" required class="block w-full min-w-0 max-w-full box-border p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
                     </div>
-                    <button type="submit" class="w-full bg-cream-primary text-white font-extrabold py-2.5 cream-btn text-sm">💾 儲存立可拍</button>
+                    <button type="submit" class="w-full bg-cream-primary text-white font-extrabold py-2.5 cream-btn text-sm">💾 儲存照片</button>
                 </form>
             `;
             document.getElementById('modal-container').classList.remove('hidden');
@@ -1712,7 +1712,7 @@
                 document.getElementById('polaroid-url').value = cloudImageUrl;
                 if (previewImg) previewImg.src = cloudImageUrl;
 
-                showToast('☁️ 相片已存入雲端硬碟！請點擊「儲存立可拍」同步');
+                showToast('☁️ 相片已存入雲端硬碟！請點擊「儲存照片」同步');
             } catch (err) {
                 console.error(err);
                 showToast('⚠️ 雲端上傳失敗（請確認 GAS 已建立新版本並授權雲端硬碟權限）');
@@ -1750,7 +1750,7 @@
             state.polaroids[achId] = { imageUrl: url, date: date };
             saveState();
             closeModal();
-            showToast('📸 立可拍紀念照已更新！');
+            showToast('📸 紀念照已更新！');
             renderView('cottage');
         }
 
@@ -1889,7 +1889,7 @@
                 <form onsubmit="handleCustomIngredientSubmit(event)" class="space-y-3">
                     <div>
                         <label class="block text-xs font-bold mb-1">食材名稱</label>
-                        <input type="text" id="cust-name" required placeholder="例如：火龍果泥、寶寶麵線" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
+                        <input type="text" id="cust-name" required placeholder="例如：蒸蛋、寶寶鬆餅" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
                     </div>
                     <div>
                         <label class="block text-xs font-bold mb-1">英文名稱 (選填)</label>
@@ -1947,7 +1947,7 @@
             const activeUrl = getActiveGasUrl();
             const statusBadge = activeUrl
                 ? `<span class="text-[11px] bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-extrabold border border-emerald-300">🟢 已啟用雲端同步</span>`
-                : `<span class="text-[11px] bg-gray-100 text-cream-muted px-2.5 py-0.5 rounded-full font-extrabold border border-gray-300">⚪ 單機模式（未貼網址）</span>`;
+                : `<span class="text-[11px] bg-gray-100 text-cream-muted px-2.5 py-0.5 rounded-full font-extrabold border border-gray-300">⚪ 單機模式</span>`;
 
             return `
                 <div class="space-y-5 max-w-md mx-auto">
@@ -2268,12 +2268,12 @@
 
                     <div class="bg-white cream-box p-3 space-y-2.5">
                         <div class="flex items-center justify-between">
-                            <button onclick="changeWeek(-1)" class="cream-btn bg-cream-bg px-3 py-1 text-xs font-extrabold">◀ 上一週</button>
+                            <button onclick="changeWeek(-1)" class="cream-btn bg-cream-bg px-3 py-1 text-xs font-extrabold">◀ </button>
                             <div class="text-center">
                                 <span class="font-extrabold text-sm text-cream-text">${rangeLabel}</span>
                                 ${weekOffset !== 0 ? `<button onclick="resetWeek()" class="ml-2 text-[10px] underline text-cream-primary font-bold">回本週</button>` : ''}
                             </div>
-                            <button onclick="changeWeek(1)" class="cream-btn bg-cream-bg px-3 py-1 text-xs font-extrabold">下一週 ▶</button>
+                            <button onclick="changeWeek(1)" class="cream-btn bg-cream-bg px-3 py-1 text-xs font-extrabold"> ▶</button>
                         </div>
 
                         <div class="flex justify-center pt-1 border-t border-dashed border-cream-border">
@@ -2430,7 +2430,7 @@
 
                 ${filtered.length === 0 ? `
                     <div class="text-center py-8 text-xs text-cream-muted bg-white/70 rounded-2xl border border-dashed border-cream-border">
-                        目前沒有符合條件的歷史紀錄 🌱
+                        沒有符合條件的歷史紀錄 🌱
                     </div>
                 ` : `
                     <div class="space-y-2.5 max-h-[58vh] overflow-y-auto pr-0.5">
@@ -2722,7 +2722,7 @@
                     <!-- 日常出門必帶清單 -->
                     <div class="bg-white cream-box p-4 space-y-2">
                         <div class="flex items-center justify-between">
-                            <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">👜 日常出門必帶清單（隨身快查）</h3>
+                            <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">👜 日常出門必帶清單</h3>
                             <span class="text-[10px] text-cream-muted font-bold">出門前掃一眼</span>
                         </div>
                         <div class="flex flex-wrap gap-1.5 pt-1">
@@ -2738,10 +2738,10 @@
 
                         ${showNewTravelForm ? `
                             <form onsubmit="handleCreateTravel(event)" class="bg-white cream-box p-4 space-y-3 border-2 border-cream-primary">
-                                <h3 class="text-sm font-extrabold text-cream-text">📝 建立新旅程（儲存後自動進入準備清單與相簿）</h3>
+                                <h3 class="text-sm font-extrabold text-cream-text">📝 建立新旅程</h3>
                                 <div>
                                     <label class="block text-xs font-bold text-cream-text mb-1">旅行名稱 *</label>
-                                    <input type="text" id="travel-name-input" required placeholder="例如：宜蘭兩天一夜、沖繩親子遊"
+                                    <input type="text" id="travel-name-input" required placeholder="例如：嘉義兩天一夜、沖繩親子遊"
                                            class="w-full px-3 py-2 text-sm rounded-xl border-2 border-cream-border focus:border-cream-primary focus:outline-none">
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -2782,7 +2782,7 @@
 
                     <!-- 歷史旅遊紀錄列表 -->
                     <div class="space-y-2.5">
-                        <h3 class="text-xs sm:text-sm font-extrabold text-cream-text px-1">📚 歷史旅遊紀錄（點擊進入相簿與勾選清單）</h3>
+                        <h3 class="text-xs sm:text-sm font-extrabold text-cream-text px-1">📚 歷史旅遊紀錄</h3>
                         ${historyHtml}
                     </div>
                 </div>
