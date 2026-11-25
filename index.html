@@ -296,9 +296,9 @@
 
         // ==================== 旅行模組預設清單與狀態 ====================
         const DAILY_OUTING_ITEMS = [
-            "奶粉/奶粉分裝瓶", "奶瓶/拋棄式奶瓶", "奶嘴頭*2~3", "涼水瓶",
-            "副食品食物泥／常溫寶寶粥", "寶寶餐具組", "矽膠圍兜", "備用口水巾",
-            "備用衣物", "髒衣收納袋", "濕紙巾", "衛生紙", "尿布"
+            "奶粉", "奶瓶", "奶嘴頭*2~3", "涼水瓶", "安撫奶嘴",
+            "副食品", "餐具組", "矽膠圍兜", "備用口水巾",
+            "備用衣物", "髒衣收納袋", "濕紙巾", "衛生紙", "尿布", "尿布墊", "屁屁膏", "棉棒"
         ];
 
         const TRAVEL_CHECKLIST_TEMPLATES = [
@@ -316,11 +316,11 @@
                 category: "🧷 尿布與清潔護理",
                 scope: "all",
                 items: [
-                    "一般尿布(天數*5+2片備用)、夜用尿布(天數+2片備用)",
+                    "一般尿布(每日6片＋2片備用)、夜用尿布(每日1片＋2片備用)",
                     "尿布墊", "濕紙巾（隨身包＋大包)", "衛生紙",
                     "乾濕兩用巾(拋棄式)", "屁屁膏", "寶寶乳液、面霜",
                     "防曬、防蚊液", "浴巾", "寶寶沐浴洗髮分裝瓶",
-                    "口腔清潔紗布／牙刷", "指甲剪", "棉花棒"
+                    "口腔清潔紗布/牙刷", "指甲剪", "棉花棒"
                 ]
             },
             {
@@ -328,15 +328,15 @@
                 scope: "all",
                 items: [
                     "換洗衣物（每日 2 套＋備用 1～2 套）",
-                    "外套／防風披風 ＋ 帽子、襪子", "睡墊", "防踢被/小被被",
-                    "安撫奶嘴（多帶 1 顆備用）＋ 隨身小玩具", "髒衣收納袋／夾鏈袋"
+                    "外套/防風披風＋帽子、襪子", "睡墊", "防踢被/小被被",
+                    "安撫奶嘴 ＋ 奶嘴夾", "隨身小玩具", "髒衣收納袋/夾鏈袋"
                 ]
             },
             {
                 category: "🩺 證件與隨身藥品",
                 scope: "all",
                 items: [
-                    "寶寶健保卡 ＋ 兒童健康手冊", "體溫計（耳溫槍／額溫槍）",
+                    "寶寶健保卡 ＋ 兒童健康手冊", "體溫計（耳溫槍/額溫槍）",
                     "常備藥品（退燒藥水、腸胃藥、外傷藥膏、生理食鹽水）",
                     "餵藥器/吸鼻器"
                 ]
@@ -345,7 +345,7 @@
                 category: "🚼 外出推車與裝備",
                 scope: "all",
                 items: [
-                    "嬰兒推車 ＋ 推車雨罩／蚊帳／涼墊",
+                    "嬰兒推車 ＋ 推車雨罩/蚊帳/涼墊",
                     "揹巾（上下樓梯與安撫用）", "地墊", "隔音耳罩"
                 ]
             },
@@ -1096,12 +1096,12 @@
                 : `<div class="w-12 h-12 rounded-full border-2 border-cream-text bg-cream-yellow flex items-center justify-center text-2xl shadow-md">👶</div>`;
 
             const orbitZones = [
-                { id: 'farm', action: "moveCharacterAndGo(this, 'section', {category: 'farm'})", icon: '🌾', title: '農田區', sub: '五穀/蔬菜', angleDeg: 105 },
-                { id: 'cottage', action: "moveCharacterAndGo(this, 'cottage', {})", icon: '🏠', title: '農舍', sub: `成就 ${state.achievements.length}/${ACHIEVEMENTS_LIST.length}`, angleDeg: 45 },
-                { id: 'greenhouse', action: "moveCharacterAndGo(this, 'section', {category: 'greenhouse'})", icon: '🪵', title: '溫室', sub: '菇類', angleDeg: 345 },
-                { id: 'pasture', action: "moveCharacterAndGo(this, 'section', {category: 'pasture'})", icon: '🥩', title: '牧場區', sub: '蛋白質/肉類', angleDeg: 285 },
-                { id: 'fish', action: "moveCharacterAndGo(this, 'section', {category: 'fish'})", icon: '🐟', title: '魚池', sub: '魚類/海鮮', angleDeg: 225 },
-                { id: 'orchard', action: "moveCharacterAndGo(this, 'section', {category: 'orchard'})", icon: '🌳', title: '果樹區', sub: '水果', angleDeg: 165 }
+                { id: 'farm', action: "moveCharacterAndGo(this, 'section', {category: 'farm'})", icon: '🌾', title: '農田區', sub: '五穀/蔬菜', angleDeg: 95 },
+                { id: 'cottage', action: "moveCharacterAndGo(this, 'cottage', {})", icon: '🏠', title: '農舍', sub: `成就 ${state.achievements.length}/${ACHIEVEMENTS_LIST.length}`, angleDeg: 35 },
+                { id: 'greenhouse', action: "moveCharacterAndGo(this, 'section', {category: 'greenhouse'})", icon: '🪵', title: '溫室', sub: '菇類', angleDeg: 335 },
+                { id: 'pasture', action: "moveCharacterAndGo(this, 'section', {category: 'pasture'})", icon: '🥩', title: '牧場區', sub: '蛋白質/肉類', angleDeg: 275 },
+                { id: 'fish', action: "moveCharacterAndGo(this, 'section', {category: 'fish'})", icon: '🐟', title: '魚池', sub: '魚類/海鮮', angleDeg: 215 },
+                { id: 'orchard', action: "moveCharacterAndGo(this, 'section', {category: 'orchard'})", icon: '🌳', title: '果樹區', sub: '水果', angleDeg: 155 }
             ];
 
             const orbitRadiusPct = 36;
@@ -1126,7 +1126,7 @@
                         <button onclick="router.navigate('home')" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold flex items-center space-x-1">
                             <span>⬅️ 返回首頁</span>
                         </button>
-                        <h2 class="text-base sm:text-lg font-extrabold">🗺️ ${escapeHtml(state.owner.nameZh)}農場地圖</h2>
+                        <h2 class="text-base sm:text-lg font-extrabold">🗺️ 農場地圖</h2>
                         <div class="w-16"></div>
                     </div>
 
@@ -1163,7 +1163,6 @@
                                     <span id="character-airplane" class="hidden text-3xl -mr-2 drop-shadow-md animate-bounce">✈️</span>
                                     ${avatarHtml}
                                 </div>
-                                <span class="bg-cream-text text-white text-[10px] px-2 py-0.5 rounded-full font-bold mt-1 shadow">${escapeHtml(state.owner.nameZh)}</span>
                             </div>
 
                             <!-- 六大區域按鈕 -->
@@ -1207,11 +1206,11 @@
         // 分區清單與卡片
         function renderSectionView(category) {
             const catMeta = {
-                'farm': { title: '🌾 農田區（五穀/蔬菜）', desc: '播種澆水三次，收成滿滿元氣鮮蔬！', bannerUrl: 'https://drive.google.com/file/d/1oaLJm4MfRsF-ZJga7WU8Uf3QzM16yGZi/view?usp=drivesdk', fallbackBg: 'from-emerald-100 via-amber-50 to-lime-100' },
-                'orchard': { title: '🌳 果樹區（水果）', desc: '播種澆水三次，摘下香甜多汁的果實！', bannerUrl: 'https://drive.google.com/file/d/1ki8yl4ZRdy26HVnUgg4oyUn4kmQxwT2Z/view?usp=drivesdk', fallbackBg: 'from-rose-100 via-amber-50 to-orange-100' },
-                'fish': { title: '🐟 魚池（魚類/海鮮）', desc: '撒餌餵食三次，看看會釣起哪隻小魚兒！', bannerUrl: 'https://drive.google.com/file/d/1pgtM55x9weBAEcZOoONbvvogi1xYDh2A/view?usp=drivesdk', fallbackBg: 'from-sky-100 via-cyan-50 to-teal-100' },
-                'pasture': { title: '🥩 牧場區（蛋白質/肉類）', desc: '餵食打卡三次，補充營養頭好壯壯！', bannerUrl: 'https://drive.google.com/file/d/1LXl879edMvAN7nwHKyxw85BcBRS_USry/view?usp=drivesdk', fallbackBg: 'from-amber-100 via-yellow-50 to-stone-100' },
-                'greenhouse': { title: '🪵 溫室（菇類）', desc: '濕潤涼爽的小木屋，噴噴水氣等菇菇冒出頭！', bannerUrl: 'https://drive.google.com/file/d/1dUQY7citMAWn4FO3yGMm709QhAmg2iN6/view?usp=drivesdk', fallbackBg: 'from-stone-200 via-amber-50 to-emerald-100' }
+                'farm': { title: '🌾 農田區（五穀/蔬菜）', desc: '陽光灑落金黃稻穗，一起灌溉期待大豐收～', bannerUrl: 'https://drive.google.com/file/d/1oaLJm4MfRsF-ZJga7WU8Uf3QzM16yGZi/view?usp=drivesdk', fallbackBg: 'from-emerald-100 via-amber-50 to-lime-100' },
+                'orchard': { title: '🌳 果樹區（水果）', desc: '微風吹過果樹，耐心等待果實熟透～', bannerUrl: 'https://drive.google.com/file/d/1ki8yl4ZRdy26HVnUgg4oyUn4kmQxwT2Z/view?usp=drivesdk', fallbackBg: 'from-rose-100 via-amber-50 to-orange-100' },
+                'fish': { title: '🐟 魚池（魚類/海鮮）', desc: '水波蕩漾的魚池，撒下飼料等魚兒游過來～', bannerUrl: 'https://drive.google.com/file/d/1pgtM55x9weBAEcZOoONbvvogi1xYDh2A/view?usp=drivesdk', fallbackBg: 'from-sky-100 via-cyan-50 to-teal-100' },
+                'pasture': { title: '🥩 牧場區（蛋白質/肉類）', desc: '大口吃肉長力氣，補充營養頭好壯壯！', bannerUrl: 'https://drive.google.com/file/d/1LXl879edMvAN7nwHKyxw85BcBRS_USry/view?usp=drivesdk', fallbackBg: 'from-amber-100 via-yellow-50 to-stone-100' },
+                'greenhouse': { title: '🪵 溫室（菇類）', desc: '藏在樹蔭與霧氣裡的秘密基地，菇菇正在長大中～', bannerUrl: 'https://drive.google.com/file/d/1dUQY7citMAWn4FO3yGMm709QhAmg2iN6/view?usp=drivesdk', fallbackBg: 'from-stone-200 via-amber-50 to-emerald-100' }
             };
             const meta = catMeta[category] || { title: '農場分區', desc: '', bannerUrl: '', fallbackBg: 'from-cream-secondary/40 to-white' };
             const normalizedBannerUrl = normalizeCloudImageUrl(meta.bannerUrl || '');
@@ -1338,8 +1337,8 @@
             const isPlantZone = ['farm', 'orchard', 'greenhouse'].includes(item.category);
 
             const submitBtnLabel = isPlantZone
-                ? (triedCount === 0 ? '🌱 播種打卡' : (triedCount === 1 ? '💧 澆水打卡' : '✨ 豐收打卡！'))
-                : (triedCount < 2 ? '🥩 餵食打卡' : '😋 肉肉好吃喔！');
+                ? (triedCount === 0 ? '🌱 播種' : (triedCount === 1 ? '💧 澆水' : '✨ 豐收！'))
+                : (triedCount < 2 ? '🥩 餵食' : '😋 肉肉好吃喔！');
 
             const todayStr = getLocalDateStr();
             const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
@@ -1713,7 +1712,7 @@
                 document.getElementById('polaroid-url').value = cloudImageUrl;
                 if (previewImg) previewImg.src = cloudImageUrl;
 
-                showToast('☁️ 相片已存入雲端硬碟！請點擊「儲存立可拍」同步給家人');
+                showToast('☁️ 相片已存入雲端硬碟！請點擊「儲存立可拍」同步');
             } catch (err) {
                 console.error(err);
                 showToast('⚠️ 雲端上傳失敗（請確認 GAS 已建立新版本並授權雲端硬碟權限）');
@@ -2164,7 +2163,7 @@
             return `
                 <div class="space-y-4">
                     <div class="flex items-center justify-center">
-                        <h2 class="text-base sm:text-lg font-extrabold">📖 ${escapeHtml(state.owner.nameZh)}農場食材總圖鑑</h2>
+                        <h2 class="text-base sm:text-lg font-extrabold">📖 農場食材總圖鑑</h2>
                     </div>
 
                     <div class="bg-white cream-box p-3 space-y-2">
