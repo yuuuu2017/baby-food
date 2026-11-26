@@ -1,4 +1,4 @@
-html_content = r'''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
@@ -3371,22 +3371,3 @@ html_content = r'''<!DOCTYPE html>
     </script>
 </body>
 </html>
-'''
-
-output_path = '/mnt/data/hngui_farm.html'
-with open(output_path, 'w', encoding='utf-8') as f:
-    f.write(html_content.strip() + '\n')
-
-import re
-js_match = re.search(r'<script>\s*(// ==================== 1\..*?)</script>', html_content, re.DOTALL)
-js_code = js_match.group(1)
-func_defs = re.findall(r'(?:async\s+)?function\s+([a-zA-Z0-9_]+)\s*\(', js_code)
-unused_funcs = []
-for fn in func_defs:
-    # count occurrences across entire html (including inline onclick/onsubmit/onchange)
-    count = len(re.findall(r'\b' + re.escape(fn) + r'\b', html_content))
-    if count <= 1:
-        unused_funcs.append(fn)
-
-print(f"Saved to {output_path}, total lines: {len(html_content.strip().splitlines())}")
-print(f"Total JS functions: {len(func_defs)}, Unused functions: {unused_funcs}")
