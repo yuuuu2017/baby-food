@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+html_content = r'''<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
@@ -13,19 +13,14 @@
                     colors: {
                         cream: {
                             bg: '#FAF8F5',
-                            card: '#FFFFFF',
                             primary: '#A3704C',
                             secondary: '#E6CCB2',
                             accent: '#D4A373',
                             yellow: '#FAEDCD',
-                            red: '#CCD5AE',
                             text: '#423830',
                             muted: '#8C7A6B',
                             border: '#D8C5B2'
                         }
-                    },
-                    fontFamily: {
-                        rounded: ['"Quicksand"', '"Nunito"', 'sans-serif']
                     }
                 }
             }
@@ -112,13 +107,6 @@
         .floating {
             animation: float 3s ease-in-out infinite;
         }
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
         /* 修正手機版（特別是 iOS Safari / LINE 瀏覽器）日期選擇框超出容器的問題 */
         input[type="date"] {
             -webkit-appearance: none;
@@ -194,7 +182,110 @@
     </div>
 
     <script>
-        // ==================== 1. 資料結構與預設資料 (支援全家人雲端試算表同步) ====================
+        // ==================== 1. 常數對照表與安全工具函式 ====================
+        const STORAGE_KEY = 'hngui_farm_state_v2';
+
+        const REACTION_META = {
+            none: {
+                label: '無過敏',
+                emoji: '🟢',
+                optText: '🟢 無過敏反應',
+                badge: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                unlockBadge: 'bg-emerald-100 text-emerald-800 border border-emerald-400',
+                cal: 'bg-emerald-600 text-white',
+                tint: 'bg-emerald-50/40',
+                allergyCard: ''
+            },
+            mild: {
+                label: '輕微過敏',
+                emoji: '🟡',
+                optText: '🟡 輕微過敏反應 (輕微紅疹/流鼻水)',
+                badge: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+                unlockBadge: 'bg-yellow-100 text-yellow-800 border border-yellow-400',
+                cal: 'bg-amber-400 text-white',
+                tint: 'bg-yellow-50/60',
+                allergyCard: 'bg-yellow-50 border-yellow-600'
+            },
+            moderate: {
+                label: '中度過敏',
+                emoji: '🟠',
+                optText: '🟠 中度過敏反應 (大量紅疹/嘔吐/腹瀉)',
+                badge: 'bg-amber-200 text-amber-900 border-amber-400',
+                unlockBadge: 'bg-amber-200 text-amber-900 border border-amber-500',
+                cal: 'bg-amber-400 text-white',
+                tint: 'bg-amber-50/60',
+                allergyCard: 'bg-amber-50 border-amber-700'
+            },
+            severe: {
+                label: '重度過敏',
+                emoji: '🔴',
+                optText: '🔴 重度過敏反應 (嚴重過敏症狀)',
+                badge: 'bg-red-600 text-white border-red-700',
+                unlockBadge: 'bg-red-600 text-white border border-red-700',
+                cal: 'bg-red-600 text-white',
+                tint: 'bg-red-100/70 border-red-600',
+                allergyCard: 'bg-red-100 border-red-600'
+            }
+        };
+
+        function getReactionMeta(reaction) {
+            return REACTION_META[reaction] || REACTION_META.none;
+        }
+
+        function renderReactionOptions(selected = 'none') {
+            return Object.entries(REACTION_META)
+                .map(([val, meta]) => `<option value="${val}" ${val === selected ? 'selected' : ''}>${meta.optText}</option>`)
+                .join('');
+        }
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function sanitizeId(rawId, fallbackPrefix = 'item') {
+            const cleaned = String(rawId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+            return cleaned || `${fallbackPrefix}_${Date.now()}`;
+        }
+
+        function sanitizeUrl(url) {
+            if (!url) return '';
+            const trimmed = String(url).trim();
+            if (
+                trimmed.startsWith('https://') ||
+                trimmed.startsWith('http://') ||
+                trimmed.startsWith('data:image/')
+            ) {
+                return trimmed;
+            }
+            return '';
+        }
+
+        function normalizeCloudImageUrl(url) {
+            const safe = sanitizeUrl(url);
+            if (!safe) return '';
+            const driveMatch = safe.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+                               safe.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/) ||
+                               safe.match(/drive\.google\.com\/uc\?(?:export=[^&]+&)?id=([a-zA-Z0-9_-]+)/);
+            if (driveMatch && driveMatch[1]) {
+                return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+            }
+            return safe;
+        }
+
+        function getLocalDateStr(dateObj = new Date()) {
+            const yyyy = dateObj.getFullYear();
+            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(dateObj.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        // ==================== 2. 資料結構與預設資料 ====================
         const DEFAULT_STATE = {
             owner: {
                 nameZh: "婚貴",
@@ -248,45 +339,95 @@
             achievements: [],
             polaroids: {},
             travels: [],
-            gasUrl: ""
+            gasUrl: "",
+            gasSecret: "",
+            updatedAt: 0
         };
+
+        function sortHistoryByDate(history) {
+            if (!Array.isArray(history)) return [];
+            return history.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+        }
+
+        function getLatestRecord(history) {
+            if (!Array.isArray(history) || history.length === 0) return null;
+            return history.reduce((latest, cur, idx) => {
+                if (!latest) return { ...cur, _idx: idx };
+                const curDate = String(cur.date || '');
+                const latDate = String(latest.date || '');
+                if (curDate > latDate || (curDate === latDate && idx > latest._idx)) {
+                    return { ...cur, _idx: idx };
+                }
+                return latest;
+            }, null);
+        }
 
         function loadInitialState() {
             try {
-                const raw = localStorage.getItem('hngui_farm_state_v2');
+                const raw = localStorage.getItem(STORAGE_KEY);
                 if (!raw) return JSON.parse(JSON.stringify(DEFAULT_STATE));
                 const parsed = JSON.parse(raw);
                 const mergedIngredients = JSON.parse(JSON.stringify(DEFAULT_STATE.ingredients));
                 if (parsed.ingredients && typeof parsed.ingredients === 'object') {
                     Object.keys(parsed.ingredients).forEach(key => {
-                        if (mergedIngredients[key]) {
-                            mergedIngredients[key] = { ...mergedIngredients[key], ...parsed.ingredients[key] };
+                        const safeKey = sanitizeId(key);
+                        const incoming = parsed.ingredients[key];
+                        if (!incoming || typeof incoming !== 'object') return;
+                        const sortedHist = sortHistoryByDate(Array.isArray(incoming.history) ? incoming.history : []);
+                        if (mergedIngredients[safeKey]) {
+                            mergedIngredients[safeKey] = {
+                                ...mergedIngredients[safeKey],
+                                ...incoming,
+                                id: safeKey,
+                                history: sortedHist
+                            };
                         } else {
-                            mergedIngredients[key] = parsed.ingredients[key];
+                            mergedIngredients[safeKey] = {
+                                ...incoming,
+                                id: safeKey,
+                                history: sortedHist
+                            };
                         }
                     });
                 }
+
+                // 兼容舊版 ingredientsGasUrl 遷移
                 const resolvedGasUrl = (parsed.gasUrl && parsed.gasUrl.trim())
                     ? parsed.gasUrl.trim()
                     : ((parsed.ingredientsGasUrl && parsed.ingredientsGasUrl.trim()) ? parsed.ingredientsGasUrl.trim() : '');
 
+                const safeCustom = Array.isArray(parsed.customIngredients)
+                    ? parsed.customIngredients.map(c => ({
+                        ...c,
+                        id: sanitizeId(c.id, 'custom'),
+                        history: sortHistoryByDate(Array.isArray(c.history) ? c.history : [])
+                    }))
+                    : [];
+
                 const safeTravels = Array.isArray(parsed.travels)
                     ? parsed.travels.map(t => ({
                         ...t,
-                        photos: Array.isArray(t.photos) ? t.photos.slice(0, 3) : []
+                        id: sanitizeId(t.id, 'travel'),
+                        photos: Array.isArray(t.photos) ? t.photos.map(sanitizeUrl).filter(Boolean).slice(0, 3) : []
                     }))
                     : [];
 
                 return {
                     ...JSON.parse(JSON.stringify(DEFAULT_STATE)),
                     ...parsed,
-                    owner: { ...DEFAULT_STATE.owner, ...(parsed.owner || {}) },
+                    owner: {
+                        ...DEFAULT_STATE.owner,
+                        ...(parsed.owner || {}),
+                        avatarUrl: sanitizeUrl((parsed.owner || {}).avatarUrl || '')
+                    },
                     ingredients: mergedIngredients,
-                    customIngredients: Array.isArray(parsed.customIngredients) ? parsed.customIngredients : [],
+                    customIngredients: safeCustom,
                     achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
                     polaroids: parsed.polaroids && typeof parsed.polaroids === 'object' ? parsed.polaroids : {},
                     travels: safeTravels,
-                    gasUrl: resolvedGasUrl
+                    gasUrl: sanitizeUrl(resolvedGasUrl),
+                    gasSecret: String(parsed.gasSecret || ''),
+                    updatedAt: Number(parsed.updatedAt) || 0
                 };
             } catch (e) {
                 console.error('載入本地資料發生錯誤，使用預設資料：', e);
@@ -369,11 +510,18 @@
         let state = loadInitialState();
         let isCloudSyncing = false;
         let pushTimer = null;
+        let hasUnsyncedLocalChanges = false;
+        let lastLocalEditTimestamp = 0;
 
         function getActiveGasUrl() {
-            return (state.gasUrl && state.gasUrl.trim().startsWith('http'))
-                ? state.gasUrl.trim()
-                : '';
+            const clean = sanitizeUrl(state.gasUrl || '');
+            return clean.startsWith('http') ? clean : '';
+        }
+
+        function appendGasSecretParam(baseUrl) {
+            const sep = baseUrl.includes('?') ? '&' : '?';
+            const secret = (state.gasSecret || '').trim();
+            return secret ? `${baseUrl}${sep}secret=${encodeURIComponent(secret)}` : baseUrl;
         }
 
         function normalizeSheetCategory(rawCat) {
@@ -399,7 +547,7 @@
             Object.keys(state.polaroids || {}).forEach(achId => {
                 const p = state.polaroids[achId];
                 if (!p) return;
-                const url = String(p.imageUrl || '');
+                const url = sanitizeUrl(p.imageUrl || '');
                 safePolaroids[achId] = {
                     date: p.date || '',
                     imageUrl: url.startsWith('data:') ? '' : url
@@ -409,12 +557,15 @@
             const safeTravels = (state.travels || []).map(t => ({
                 ...t,
                 photos: (Array.isArray(t.photos) ? t.photos : [])
-                    .filter(u => !String(u).startsWith('data:'))
+                    .map(sanitizeUrl)
+                    .filter(u => u && !u.startsWith('data:'))
                     .slice(0, 3)
             }));
 
-            const safeAvatar = String(state.owner.avatarUrl || '');
+            const safeAvatar = sanitizeUrl(state.owner.avatarUrl || '');
             return {
+                secret: (state.gasSecret || '').trim(),
+                updatedAt: state.updatedAt || Date.now(),
                 owner: {
                     nameZh: state.owner.nameZh,
                     nameEn: state.owner.nameEn,
@@ -429,38 +580,97 @@
             };
         }
 
-        // 自動背景儲存全家人共用紀錄到 Google 試算表 (FamilyRecords)
+        // 立即執行上傳（供 debounce 與 pagehide/visibilitychange 共用）
+        async function flushCloudPushNow() {
+            const targetUrl = getActiveGasUrl();
+            if (!targetUrl) return;
+            if (pushTimer) {
+                clearTimeout(pushTimer);
+                pushTimer = null;
+            }
+
+            try {
+                const payload = buildCloudFamilyPayload();
+                const serialized = JSON.stringify(payload);
+                if (serialized.length > 48000) {
+                    showToast('⚠️ 雲端同步資料量接近試算表單格上限（50,000 字元），建議精簡過舊備註！');
+                }
+
+                const res = await fetch(targetUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: serialized,
+                    keepalive: true
+                });
+
+                if (res.ok) {
+                    try {
+                        const data = await res.json();
+                        if (data && data.status === 'error') {
+                            console.warn('GAS 回傳錯誤：', data.message);
+                            showToast(`⚠️ 雲端儲存異常：${data.message || '請檢查試算表設定'}`);
+                            return;
+                        }
+                    } catch (_) {
+                        // 若 GAS 回傳純文字或空回應仍視為送達
+                    }
+                    hasUnsyncedLocalChanges = false;
+                }
+            } catch (err) {
+                console.warn('雲端紀錄寫入失敗：', err);
+            }
+        }
+
+        // 自動背景儲存全家人共用紀錄到 Google 試算表
         function schedulePushFamilyStateToCloud(immediate = false) {
             const targetUrl = getActiveGasUrl();
             if (!targetUrl) return;
 
             if (pushTimer) clearTimeout(pushTimer);
-            pushTimer = setTimeout(async () => {
-                try {
-                    const payload = buildCloudFamilyPayload();
-                    await fetch(targetUrl, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(payload)
-                    });
-                } catch (err) {
-                    console.warn('雲端紀錄寫入失敗：', err);
-                }
+            pushTimer = setTimeout(() => {
+                flushCloudPushNow();
             }, immediate ? 50 : 600);
         }
 
-        // 從 Google 試算表拉取全家人共用紀錄並套用
-        async function pullFamilyStateFromCloud() {
-            const targetUrl = getActiveGasUrl();
-            if (!targetUrl) return false;
+        // 切換分頁或關閉視窗前，若有尚未送出的雲端修改立即送出
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden' && hasUnsyncedLocalChanges && getActiveGasUrl()) {
+                flushCloudPushNow();
+            }
+        });
+        window.addEventListener('pagehide', () => {
+            if (hasUnsyncedLocalChanges && getActiveGasUrl()) {
+                flushCloudPushNow();
+            }
+        });
 
-            const sep = targetUrl.includes('?') ? '&' : '?';
-            const res = await fetch(`${targetUrl}${sep}action=get_state&t=${Date.now()}`, { cache: 'no-store' });
-            if (!res.ok) return false;
+        // 從 Google 試算表拉取全家人共用紀錄並套用
+        async function pullFamilyStateFromCloud(syncStartedAt = 0, isManual = false) {
+            const targetUrl = getActiveGasUrl();
+            if (!targetUrl) return { status: 'no_url' };
+
+            const authedUrl = appendGasSecretParam(targetUrl);
+            const sep = authedUrl.includes('?') ? '&' : '?';
+            const res = await fetch(`${authedUrl}${sep}action=get_state&t=${Date.now()}`, { cache: 'no-store' });
+            if (!res.ok) return { status: 'http_error' };
             const cloudState = await res.json();
-            if (!cloudState || cloudState.status === 'empty' || cloudState.status === 'error') {
-                return false;
+            if (!cloudState || cloudState.status === 'empty') {
+                return { status: 'empty' };
+            }
+            if (cloudState.status === 'error') {
+                if (isManual) showToast(`⚠️ 雲端驗證失敗：${cloudState.message || '請確認通關密語'}`);
+                return { status: 'error' };
+            }
+
+            // 競態保護：若使用者在本次拉取期間剛做了本機修改，不覆蓋本機資料，改由本機推送至雲端
+            if (lastLocalEditTimestamp > syncStartedAt && hasUnsyncedLocalChanges) {
+                return { status: 'local_newer' };
+            }
+
+            const cloudUpdatedAt = Number(cloudState.updatedAt) || 0;
+            const localUpdatedAt = Number(state.updatedAt) || 0;
+            if (hasUnsyncedLocalChanges && localUpdatedAt > cloudUpdatedAt && cloudUpdatedAt > 0) {
+                return { status: 'local_newer' };
             }
 
             if (cloudState.owner && typeof cloudState.owner === 'object') {
@@ -468,20 +678,25 @@
                 state.owner.nameEn = cloudState.owner.nameEn || state.owner.nameEn;
                 state.owner.birthDate = cloudState.owner.birthDate || state.owner.birthDate;
                 if (cloudState.owner.avatarUrl) {
-                    state.owner.avatarUrl = cloudState.owner.avatarUrl;
+                    const safeAvatar = sanitizeUrl(cloudState.owner.avatarUrl);
+                    if (safeAvatar) state.owner.avatarUrl = safeAvatar;
                 }
             }
 
             if (cloudState.historyMap && typeof cloudState.historyMap === 'object') {
                 Object.keys(state.ingredients).forEach(id => {
-                    state.ingredients[id].history = Array.isArray(cloudState.historyMap[id])
-                        ? cloudState.historyMap[id]
-                        : [];
+                    const rawHist = Array.isArray(cloudState.historyMap[id]) ? cloudState.historyMap[id] : [];
+                    state.ingredients[id].history = sortHistoryByDate(rawHist);
                 });
             }
 
             if (Array.isArray(cloudState.customIngredients)) {
-                state.customIngredients = cloudState.customIngredients;
+                state.customIngredients = cloudState.customIngredients.map(c => ({
+                    ...c,
+                    id: sanitizeId(c.id, 'custom'),
+                    imageUrl: sanitizeUrl(c.imageUrl || ''),
+                    history: sortHistoryByDate(Array.isArray(c.history) ? c.history : [])
+                }));
             }
             if (Array.isArray(cloudState.achievements)) {
                 state.achievements = cloudState.achievements;
@@ -490,13 +705,15 @@
                 const localTravelsMap = {};
                 (state.travels || []).forEach(lt => { localTravelsMap[lt.id] = lt; });
                 state.travels = cloudState.travels.map(ct => {
-                    const localT = localTravelsMap[ct.id];
-                    const remotePhotos = Array.isArray(ct.photos) ? ct.photos : [];
+                    const safeId = sanitizeId(ct.id, 'travel');
+                    const localT = localTravelsMap[safeId];
+                    const remotePhotos = Array.isArray(ct.photos) ? ct.photos.map(sanitizeUrl).filter(Boolean) : [];
                     const localBase64Photos = (localT && Array.isArray(localT.photos))
                         ? localT.photos.filter(u => String(u).startsWith('data:'))
                         : [];
                     return {
                         ...ct,
+                        id: safeId,
                         photos: [...remotePhotos, ...localBase64Photos].slice(0, 3)
                     };
                 });
@@ -505,21 +722,29 @@
                 Object.keys(cloudState.polaroids).forEach(achId => {
                     const remoteP = cloudState.polaroids[achId];
                     const localP = state.polaroids[achId] || {};
+                    const remoteUrl = sanitizeUrl(remoteP.imageUrl || '');
                     state.polaroids[achId] = {
                         date: remoteP.date || localP.date || '',
-                        imageUrl: remoteP.imageUrl || (String(localP.imageUrl || '').startsWith('data:') ? localP.imageUrl : '')
+                        imageUrl: remoteUrl || (String(localP.imageUrl || '').startsWith('data:') ? localP.imageUrl : '')
                     };
                 });
             }
-            return true;
+
+            if (cloudUpdatedAt > 0) {
+                state.updatedAt = cloudUpdatedAt;
+            }
+            hasUnsyncedLocalChanges = false;
+            return { status: 'applied' };
         }
 
         // 從 Google 試算表同步官方食材圖鑑
-        async function loadIngredientsFromCloud(showFeedback = false) {
+        async function loadIngredientsFromCloud() {
             const targetUrl = getActiveGasUrl();
             if (!targetUrl) return;
 
-            const response = await fetch(targetUrl, { cache: 'no-store' });
+            const authedUrl = appendGasSecretParam(targetUrl);
+            const sep = authedUrl.includes('?') ? '&' : '?';
+            const response = await fetch(`${authedUrl}${sep}t=${Date.now()}`, { cache: 'no-store' });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const payload = await response.json();
 
@@ -549,11 +774,11 @@
                 if (!name) return;
 
                 const rawId = String(row.id || row.ID || row.Id || '').trim();
-                const id = rawId || `sheet_item_${idx + 1}`;
+                const id = sanitizeId(rawId || `sheet_item_${idx + 1}`, 'sheet_item');
                 const nameEn = String(row.nameEn || row.name_en || row.english || row.English || row.en || row['英文名稱'] || row['英文'] || '').trim();
                 const category = normalizeSheetCategory(row.category || row.Category || row['分類'] || row['分區']);
                 const seedEmoji = String(row.seedEmoji || row.seed_emoji || '❓').trim() || '❓';
-                const imageUrl = String(row.imageUrl || row.image_url || row.image || row.img || row.imgUrl || row['圖片網址'] || row['圖片'] || '').trim();
+                const imageUrl = sanitizeUrl(String(row.imageUrl || row.image_url || row.image || row.img || row.imgUrl || row['圖片網址'] || row['圖片'] || '').trim());
                 const prep = String(row.prep || row.Prep || row['準備方式'] || row['準備方式與切法建議'] || '請依照寶寶月齡調整質地與大小。').trim();
 
                 let preservedHistory = [];
@@ -572,7 +797,7 @@
                     seedEmoji,
                     imageUrl,
                     prep,
-                    history: preservedHistory
+                    history: sortHistoryByDate(preservedHistory)
                 };
             });
 
@@ -597,20 +822,23 @@
             }
             if (isCloudSyncing) return;
             isCloudSyncing = true;
+            const syncStartedAt = Date.now();
             const syncBtn = document.getElementById('header-family-sync-btn');
             if (syncBtn) syncBtn.innerHTML = `<span>⏳</span><span>同步中</span>`;
 
             try {
-                await loadIngredientsFromCloud(false);
-                const hasCloudFamily = await pullFamilyStateFromCloud();
-                if (!hasCloudFamily && getAllRecords().length > 0) {
+                await loadIngredientsFromCloud();
+                const pullRes = await pullFamilyStateFromCloud(syncStartedAt, showFeedback);
+                if (pullRes.status === 'local_newer' || (pullRes.status === 'empty' && getAllRecords().length > 0)) {
                     schedulePushFamilyStateToCloud(true);
                 }
                 saveStateSilently();
                 updateHeaderInfo();
                 checkAchievements();
-                if (showFeedback) {
-                    showToast('☁️ 已同步最新食材圖鑑與紀錄！');
+                if (showFeedback && pullRes.status !== 'error') {
+                    showToast(pullRes.status === 'local_newer'
+                        ? '☁️ 已將本機最新紀錄同步至雲端！'
+                        : '☁️ 已同步最新食材圖鑑與紀錄！');
                 }
             } catch (err) {
                 console.warn('雲端同步異常：', err);
@@ -624,12 +852,24 @@
             }
         }
 
+        function persistToLocalStorage() {
+            const jsonStr = JSON.stringify(state);
+            if (jsonStr.length > 4400000) {
+                showToast('⚠️ 本機儲存空間即將額滿，建議改用雲端同步或刪除舊照片！');
+            }
+            localStorage.setItem(STORAGE_KEY, jsonStr);
+        }
+
         function saveState() {
+            const now = Date.now();
+            state.updatedAt = now;
+            lastLocalEditTimestamp = now;
+            hasUnsyncedLocalChanges = true;
             try {
-                localStorage.setItem('hngui_farm_state_v2', JSON.stringify(state));
+                persistToLocalStorage();
             } catch (e) {
                 console.error('儲存資料至 LocalStorage 失敗：', e);
-                showToast('⚠️ 儲存空間已滿，建議改用圖片網址或刪除部分舊照片！');
+                showToast('⚠️ 儲存空間已滿，無法寫入本機！請改用圖片網址或刪除部分舊照片');
             }
             updateHeaderInfo();
             checkAchievements();
@@ -638,27 +878,20 @@
 
         function saveStateSilently() {
             try {
-                localStorage.setItem('hngui_farm_state_v2', JSON.stringify(state));
+                persistToLocalStorage();
             } catch (e) {
                 console.error('靜默儲存資料失敗：', e);
             }
         }
 
-        function getLocalDateStr(dateObj = new Date()) {
-            const yyyy = dateObj.getFullYear();
-            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const dd = String(dateObj.getDate()).padStart(2, '0');
-            return `${yyyy}-${mm}-${dd}`;
-        }
-
-        // ==================== 2. 成就定義 (28項完整成就) ====================
+        // ==================== 3. 成就定義 (28項完整成就) ====================
         const ACHIEVEMENTS_LIST = [
             { id: 'first_food', title: '初嚐一口', desc: '記錄寶寶第一次吃的副食品', icon: '🥄', condition: s => getAllRecords().length >= 1 },
             { id: 'five_kinds', title: '美食小探險', desc: '累積嘗試過 5 種不同的食材', icon: '⭐️', condition: s => getTriedCount() >= 5 },
             { id: 'ten_kinds', title: '十全十美', desc: '累積嘗試過 10 種不同的食材', icon: '🌟', condition: s => getTriedCount() >= 10 },
             { id: 'thirty_kinds', title: '味蕾小博士', desc: '累積嘗試過 30 種不同的食材', icon: '🎓', condition: s => getTriedCount() >= 30 },
             { id: 'fifty_kinds', title: '美食大富翁', desc: '累積嘗試過 50 種（含自訂）不同的食材', icon: '👑', condition: s => getTriedCount() >= 50 },
-            { id: 'full_encyclopedia', title: '資深小農夫', desc: '解鎖圖鑑全部食材（每種皆吃滿 3 次）', icon: '👩‍🌾', condition: s => getOfficialUnlockedCount() >= Object.keys(s.ingredients).length },
+            { id: 'full_encyclopedia', title: '資深小農夫', desc: '解鎖圖鑑全部食材（每種皆吃滿 3 次）', icon: '👩‍🌾', condition: s => Object.keys(s.ingredients).length > 0 && getOfficialUnlockedCount() >= Object.keys(s.ingredients).length },
 
             { id: 'farm_sprout', title: '農場萌芽', desc: '第一次在農田、果樹或溫室完成「播種」，並成功解鎖首張圖鑑卡', icon: '🌱', condition: s => countCategoriesUnlocked(s, ['farm', 'orchard', 'greenhouse']) >= 1 },
             { id: 'green_elf', title: '卜派愛吃菜', desc: '在農田區解鎖「菠菜」圖鑑卡', icon: '🥗', condition: s => hasEatenFarmVeggie(s) },
@@ -686,7 +919,15 @@
             { id: 'first_birthday_farmer', title: '週歲小農場主', desc: '寶寶月齡滿 12 個月，正式完成副食品階段的農場大冒險', icon: '🎂', condition: s => getBabyMonthsNum() >= 12 }
         ];
 
-        // ==================== 3. 輔助計算函式 ====================
+        // ==================== 4. 輔助計算函式 ====================
+        function getAllIngredients(s = state) {
+            return [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
+        }
+
+        function findIngredientById(itemId) {
+            return state.ingredients[itemId] || state.customIngredients.find(i => i.id === itemId) || null;
+        }
+
         function matchIngredient(ing, keywords) {
             const idStr = String(ing.id || '').toLowerCase().trim();
             const nameStr = String(ing.name || '').trim();
@@ -698,16 +939,14 @@
         }
 
         function isUnlockedByKeywords(s, keywords) {
-            const allIngs = [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
-            return allIngs.some(ing => matchIngredient(ing, keywords) && ing.history && ing.history.length >= 3);
+            return getAllIngredients(s).some(ing => matchIngredient(ing, keywords) && ing.history && ing.history.length >= 3);
         }
 
         const POPEYE_SECRET_KEYWORDS = ['菠菜', 'spinach'];
         function hasEatenFarmVeggie(s) {
-            const allIngs = [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
-            return allIngs.some(ing => 
-                ing.category === 'farm' && 
-                matchIngredient(ing, POPEYE_SECRET_KEYWORDS) && 
+            return getAllIngredients(s).some(ing =>
+                ing.category === 'farm' &&
+                matchIngredient(ing, POPEYE_SECRET_KEYWORDS) &&
                 ing.history && ing.history.length >= 3
             );
         }
@@ -720,67 +959,60 @@
             return Object.values(state.ingredients || {}).filter(ing => ing.history && ing.history.length >= 3).length;
         }
 
-        function getUnlockedCount() {
-            const allIngs = [...Object.values(state.ingredients || {}), ...(state.customIngredients || [])];
-            return allIngs.filter(ing => ing.history && ing.history.length >= 3).length;
+        function parseBirthDateSafe() {
+            const parts = String(state.owner.birthDate || '').split('-').map(Number);
+            if (parts.length !== 3 || parts.some(isNaN)) return null;
+            const [y, m, d] = parts;
+            const dt = new Date(y, m - 1, d);
+            return isNaN(dt.getTime()) ? null : dt;
+        }
+
+        function getBabyAgeBreakdown() {
+            const birth = parseBirthDateSafe();
+            if (!birth) return { months: 0, days: 0 };
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            if (today <= birth) return { months: 0, days: 0 };
+
+            let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+            if (today.getDate() < birth.getDate()) months--;
+            months = Math.max(0, months);
+
+            // 計算整月後的剩餘天數，確保與 getBabyMonthsNum() 完全一致
+            const anchor = new Date(birth.getFullYear(), birth.getMonth() + months, birth.getDate());
+            const days = Math.max(0, Math.floor((today - anchor) / (1000 * 60 * 60 * 24)));
+            return { months, days };
         }
 
         function getBabyAgeString() {
-            const [y, m, d] = state.owner.birthDate.split('-').map(Number);
-            const birth = new Date(y, m - 1, d);
-            const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-            let diffTime = today - birth;
-            let diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            if (diffDays < 0) diffDays = 0;
-
-            let months = Math.floor(diffDays / 30);
-            let days = diffDays % 30;
+            const { months, days } = getBabyAgeBreakdown();
             return `寶寶年齡：${months}個月${days}天`;
         }
 
         function getBabyMonthsNum() {
-            const [y, m, d] = state.owner.birthDate.split('-').map(Number);
-            const birth = new Date(y, m - 1, d);
-            const now = new Date();
-            let months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
-            if (now.getDate() < birth.getDate()) months--;
-            return Math.max(0, months);
+            return getBabyAgeBreakdown().months;
         }
 
         function getAllRecords() {
-            let records = [];
-            Object.values(state.ingredients).forEach(ing => {
-                ing.history.forEach((h, idx) => records.push({ ...h, historyIndex: idx, ingredientId: ing.id, ingredientName: ing.name }));
-            });
-            state.customIngredients.forEach(ing => {
-                ing.history.forEach((h, idx) => records.push({ ...h, historyIndex: idx, ingredientId: ing.id, ingredientName: ing.name }));
+            const records = [];
+            getAllIngredients().forEach(ing => {
+                (ing.history || []).forEach((h, idx) => {
+                    records.push({ ...h, historyIndex: idx, ingredientId: ing.id, ingredientName: ing.name });
+                });
             });
             return records;
         }
 
         function getTriedCount() {
-            let count = 0;
-            Object.values(state.ingredients).forEach(ing => {
-                if (ing.history.length > 0) count++;
-            });
-            state.customIngredients.forEach(ing => {
-                if (ing.history.length > 0) count++;
-            });
-            return count;
+            return getAllIngredients().filter(ing => ing.history && ing.history.length > 0).length;
         }
 
         function hasEatenCategory(s, cat) {
-            const official = Object.values(s.ingredients).some(i => i.category === cat && i.history.length > 0);
-            const custom = s.customIngredients.some(i => i.category === cat && i.history.length > 0);
-            return official || custom;
+            return getAllIngredients(s).some(i => i.category === cat && i.history && i.history.length > 0);
         }
 
         function countCategoryUnlocked(s, cat) {
-            const officialCount = Object.values(s.ingredients).filter(i => i.category === cat && i.history.length >= 3).length;
-            const customCount = s.customIngredients.filter(i => i.category === cat && i.history.length >= 3).length;
-            return officialCount + customCount;
+            return getAllIngredients(s).filter(i => i.category === cat && i.history && i.history.length >= 3).length;
         }
 
         function countCategoriesUnlocked(s, cats) {
@@ -788,21 +1020,18 @@
         }
 
         function hasCompletedThreeDayChallenge(s) {
-            const items = [...Object.values(s.ingredients), ...s.customIngredients];
-            return items.some(item => item.history.length >= 3);
+            return getAllIngredients(s).some(item => item.history && item.history.length >= 3);
         }
 
         function hasOvercomeAllergy(s) {
-            let items = [...Object.values(s.ingredients), ...s.customIngredients];
-            return items.some(item => {
-                let history = item.history;
+            return getAllIngredients(s).some(item => {
+                const history = sortHistoryByDate([...(item.history || [])]);
                 if (history.length < 2) return false;
                 let hadAllergy = false;
                 for (let i = 0; i < history.length - 1; i++) {
                     if (['mild', 'moderate', 'severe'].includes(history[i].reaction)) hadAllergy = true;
                 }
-                let lastReaction = history[history.length - 1].reaction;
-                return hadAllergy && lastReaction === 'none';
+                return hadAllergy && history[history.length - 1].reaction === 'none';
             });
         }
 
@@ -843,7 +1072,7 @@
         }
 
         function getSavedPolaroidPhotosCount(s) {
-            return Object.values(s.polaroids).filter(p => p && p.imageUrl && p.imageUrl.trim().length > 0).length;
+            return Object.values(s.polaroids || {}).filter(p => p && p.imageUrl && p.imageUrl.trim().length > 0).length;
         }
 
         function getUniqueRecordDates() {
@@ -895,7 +1124,9 @@
 
             const toast = document.createElement('div');
             toast.className = 'bg-cream-text text-white px-4 py-2.5 rounded-2xl border-2 border-cream-secondary shadow-xl text-xs sm:text-sm font-bold flex items-center space-x-2 pointer-events-auto transition-all duration-300 transform translate-y-0 opacity-100';
-            toast.innerHTML = `<span>${message}</span>`;
+            const span = document.createElement('span');
+            span.textContent = message;
+            toast.appendChild(span);
             container.appendChild(toast);
 
             setTimeout(() => {
@@ -910,7 +1141,28 @@
             }, 3200);
         }
 
-        // ==================== 4. Router 導覽系統 ====================
+        // 統一新增食用紀錄核心流程
+        function addIngredientRecord(itemId, { date, amount, reaction, notes }, toastPrefix = '🎉 成功記錄') {
+            const item = findIngredientById(itemId);
+            if (!item) return;
+
+            const prevCount = item.history.length;
+            item.history.push({ date, amount, reaction, notes });
+            sortHistoryByDate(item.history);
+            const newCount = item.history.length;
+
+            saveState();
+            closeModal();
+
+            if (prevCount < 3 && newCount >= 3) {
+                openIngredientUnlockCardModal(item.id);
+            } else {
+                showToast(`${toastPrefix} ${item.name}！`);
+            }
+            renderView(router.currentView, router.currentParams || {});
+        }
+
+        // ==================== 5. Router 導覽系統 ====================
         const router = {
             currentView: 'home',
             currentParams: {},
@@ -976,7 +1228,7 @@
             }
         }
 
-        // ==================== 5. 各頁面渲染函式 ====================
+        // ==================== 6. 各頁面渲染函式 ====================
         const PLANET_SHARE_URL = 'https://drive.google.com/file/d/14YkCxyGzwGftiol19JgZs3Whev6nzVF9/view?usp=drive_link';
 
         function getFarmPlanetSvg(extraClass = 'w-full h-full') {
@@ -984,7 +1236,7 @@
             const fallbackDriveUrl = 'https://drive.google.com/uc?export=view&id=14YkCxyGzwGftiol19JgZs3Whev6nzVF9';
             return `
                 <div class="relative ${extraClass} flex items-center justify-center">
-                    <img src="${primaryUrl}" alt="農場星球"
+                    <img src="${escapeHtml(primaryUrl)}" alt="農場星球"
                          onerror="if (!this.dataset.triedFallback) { this.dataset.triedFallback = '1'; this.src = '${fallbackDriveUrl}'; } else { this.style.display = 'none'; this.nextElementSibling.style.display = 'block'; }"
                          class="w-full h-full object-contain rounded-full">
                     <svg style="display:none;" viewBox="0 0 260 260" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -1026,12 +1278,15 @@
             `;
         }
 
-        function renderHomeView() {
-            const avatarUrl = state.owner.avatarUrl;
-            const avatarHtml = avatarUrl 
-                ? `<img src="${avatarUrl}" onerror="this.onerror=null; this.src='https://placehold.co/100x100/E6CCB2/423830?text=Baby'" class="w-16 h-16 rounded-full border-2 border-cream-text object-cover shadow-md bg-white">`
-                : `<div class="w-16 h-16 rounded-full border-2 border-cream-text bg-cream-yellow flex items-center justify-center text-3xl shadow-md">👶</div>`;
+        function renderAvatarHtml(sizeClass = 'w-16 h-16', textClass = 'text-3xl', fallbackSize = 100) {
+            const safeAvatar = normalizeCloudImageUrl(state.owner.avatarUrl);
+            return safeAvatar
+                ? `<img src="${escapeHtml(safeAvatar)}" onerror="this.onerror=null; this.src='https://placehold.co/${fallbackSize}x${fallbackSize}/E6CCB2/423830?text=Baby'" class="${sizeClass} rounded-full border-2 border-cream-text object-cover shadow-md bg-white">`
+                : `<div class="${sizeClass} rounded-full border-2 border-cream-text bg-cream-yellow flex items-center justify-center ${textClass} shadow-md">👶</div>`;
+        }
 
+        function renderHomeView() {
+            const avatarHtml = renderAvatarHtml('w-16 h-16', 'text-3xl', 100);
             const allergyCount = getAllergicIngredientsList().length;
             const allergyBadge = allergyCount > 0 ? `<span class="ml-1.5 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full font-extrabold">${allergyCount}</span>` : '';
 
@@ -1090,10 +1345,7 @@
 
         // 出發去農場地圖頁面
         function renderFarmMapView() {
-            const avatarUrl = state.owner.avatarUrl;
-            const avatarHtml = avatarUrl 
-                ? `<img src="${avatarUrl}" onerror="this.onerror=null; this.src='https://placehold.co/80x80/E6CCB2/423830?text=Baby'" class="w-12 h-12 rounded-full border-2 border-cream-text object-cover shadow-md bg-white">`
-                : `<div class="w-12 h-12 rounded-full border-2 border-cream-text bg-cream-yellow flex items-center justify-center text-2xl shadow-md">👶</div>`;
+            const avatarHtml = renderAvatarHtml('w-12 h-12', 'text-2xl', 80);
 
             const orbitZones = [
                 { id: 'farm', action: "moveCharacterAndGo(this, 'section', {category: 'farm'})", icon: '🌾', title: '農田區', sub: '五穀/蔬菜', angleDeg: 115 },
@@ -1130,10 +1382,7 @@
                         <div class="w-16"></div>
                     </div>
 
-                    <!-- 外層共同定位區 -->
                     <div class="relative w-full max-w-md flex flex-col items-end">
-                        
-                        <!-- 1. 星球圓圈之外的「旅行」天空按鈕 -->
                         <div class="mb-2.5 flex items-center gap-2 z-10">
                             <span class="text-[11px] text-sky-600/70 font-bold tracking-widest select-none">☁️ ┄┄┄ ✈️</span>
                             <button onclick="moveCharacterAndGo(this, 'travel', {})"
@@ -1146,18 +1395,13 @@
                             </button>
                         </div>
 
-                        <!-- 2. 圓形星球與六大區域軌道方框 -->
                         <div class="relative w-full aspect-square bg-gradient-to-br from-cream-secondary/25 via-white to-cream-primary/15 cream-box flex items-center justify-center p-4">
-                            
-                            <!-- 軌道虛線輔助圓環 -->
                             <div class="absolute w-[73%] h-[73%] rounded-full border-2 border-dashed border-cream-primary/30 pointer-events-none"></div>
 
-                            <!-- 中央農場星球插畫 -->
                             <div class="w-[70%] h-[70%] flex items-center justify-center pointer-events-none">
                                 ${getFarmPlanetSvg('w-full h-full drop-shadow-sm')}
                             </div>
 
-                            <!-- 正中央小人 -->
                             <div id="farm-character" class="absolute z-30 flex flex-col items-center transition-all duration-700 ease-out pointer-events-none">
                                 <div class="relative flex items-center">
                                     <span id="character-airplane" class="hidden text-3xl -mr-2 drop-shadow-md animate-bounce">✈️</span>
@@ -1165,7 +1409,6 @@
                                 </div>
                             </div>
 
-                            <!-- 六大區域按鈕 -->
                             ${orbitButtonsHtml}
                         </div>
                     </div>
@@ -1215,15 +1458,13 @@
             const meta = catMeta[category] || { title: '農場分區', desc: '', bannerUrl: '', fallbackBg: 'from-cream-secondary/40 to-white' };
             const normalizedBannerUrl = normalizeCloudImageUrl(meta.bannerUrl || '');
 
-            const officialItems = Object.values(state.ingredients).filter(i => i.category === category);
-            const customItems = state.customIngredients.filter(i => i.category === category);
-            const items = [...officialItems, ...customItems];
+            const items = getAllIngredients().filter(i => i.category === category);
 
             let html = `
                 <div class="space-y-4">
                     <div class="relative w-full rounded-2xl overflow-hidden shadow-sm bg-gradient-to-br ${meta.fallbackBg} flex items-center justify-center">
                         ${normalizedBannerUrl ? `
-                            <img src="${normalizedBannerUrl}" alt="${escapeHtml(meta.title)}"
+                            <img src="${escapeHtml(normalizedBannerUrl)}" alt="${escapeHtml(meta.title)}"
                                  onerror="this.style.display='none'; this.parentElement.classList.add('h-44');"
                                  class="w-full h-auto block">
                         ` : '<div class="h-44"></div>'}
@@ -1241,36 +1482,24 @@
 
             items.forEach(item => {
                 const triedCount = item.history.length;
-                let isUnlocked = triedCount >= 3;
+                const isUnlocked = triedCount >= 3;
                 const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
-                let displayVisual = isUnlocked
+                const displayVisual = isUnlocked
                     ? (normalizedImgUrl
-                        ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-5xl">🎴</span>`
+                        ? `<img src="${escapeHtml(normalizedImgUrl)}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-5xl">🎴</span>`
                         : `<span class="text-5xl">🎴</span>`)
-                    : item.seedEmoji;
-                let reactionBadge = `<span class="text-[10px] bg-gray-100 text-cream-text px-2 py-0.5 rounded-full font-bold">尚未嘗試</span>`;
-                let cardTint = '';
+                    : escapeHtml(item.seedEmoji);
 
-                if (triedCount > 0) {
-                    const latest = item.history[triedCount - 1];
-                    if (latest.reaction === 'none') {
-                        reactionBadge = `<span class="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">無過敏</span>`;
-                        cardTint = 'bg-emerald-50/40';
-                    } else if (latest.reaction === 'mild') {
-                        reactionBadge = `<span class="text-[10px] bg-yellow-100 text-yellow-800 border border-yellow-300 px-2 py-0.5 rounded-full font-bold">輕微過敏</span>`;
-                        cardTint = 'bg-yellow-50/60';
-                    } else if (latest.reaction === 'moderate') {
-                        reactionBadge = `<span class="text-[10px] bg-amber-200 text-amber-900 border border-amber-400 px-2 py-0.5 rounded-full font-bold">中度過敏</span>`;
-                        cardTint = 'bg-amber-50/60';
-                    } else if (latest.reaction === 'severe') {
-                        reactionBadge = `<span class="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-extrabold">⚠️ 重度過敏</span>`;
-                        cardTint = 'bg-red-100/70 border-red-600';
-                    }
-                }
+                const latest = getLatestRecord(item.history);
+                const metaInfo = latest ? getReactionMeta(latest.reaction) : null;
+                const reactionBadge = metaInfo
+                    ? `<span class="text-[10px] border px-2 py-0.5 rounded-full ${latest.reaction === 'severe' ? 'font-extrabold' : 'font-bold'} ${metaInfo.badge}">${latest.reaction === 'severe' ? '⚠️ ' : ''}${metaInfo.label}</span>`
+                    : `<span class="text-[10px] bg-gray-100 text-cream-text px-2 py-0.5 rounded-full font-bold">尚未嘗試</span>`;
+                const cardTint = metaInfo ? metaInfo.tint : '';
 
                 if (isUnlocked) {
                     html += `
-                        <div onclick="openIngredientDetail('${item.id}')" class="cream-dashed-box ${cardTint} p-3 cursor-pointer flex flex-col items-center text-center justify-between">
+                        <div onclick="openIngredientDetail('${escapeHtml(item.id)}')" class="cream-dashed-box ${cardTint} p-3 cursor-pointer flex flex-col items-center text-center justify-between">
                             <div class="p-1.5 bg-white rounded-2xl border-2 border-cream-text shadow-sm mb-2 flex items-center justify-center w-32 h-32 sm:w-36 sm:h-36 overflow-hidden">
                                 ${displayVisual}
                             </div>
@@ -1284,7 +1513,7 @@
                     `;
                 } else {
                     html += `
-                        <div onclick="openIngredientDetail('${item.id}')" class="cream-dashed-box ${cardTint} p-3.5 cursor-pointer flex flex-col items-center text-center justify-between">
+                        <div onclick="openIngredientDetail('${escapeHtml(item.id)}')" class="cream-dashed-box ${cardTint} p-3.5 cursor-pointer flex flex-col items-center text-center justify-between">
                             <div class="text-3xl sm:text-4xl p-1.5 bg-white rounded-2xl border-2 border-cream-text shadow-sm mb-2 flex items-center justify-center w-14 h-14 overflow-hidden">
                                 ${displayVisual}
                             </div>
@@ -1300,36 +1529,13 @@
                 }
             });
 
-            html += `
-                    </div>
-                </div>
-            `;
+            html += `</div></div>`;
             return html;
         }
 
-        // ==================== 6. 食材詳情彈窗、圖鑑解鎖卡與農舍寫真牆 ====================
-        function getReactionText(reaction) {
-            switch (reaction) {
-                case 'none': return '無過敏';
-                case 'mild': return '輕微過敏';
-                case 'moderate': return '中度過敏';
-                case 'severe': return '重度過敏';
-                default: return '無過敏';
-            }
-        }
-
-        function getReactionBadgeClass(reaction) {
-            switch (reaction) {
-                case 'none': return 'bg-emerald-100 text-emerald-800';
-                case 'mild': return 'bg-yellow-100 text-yellow-800';
-                case 'moderate': return 'bg-amber-200 text-amber-900';
-                case 'severe': return 'bg-red-600 text-white';
-                default: return 'bg-emerald-100 text-emerald-800';
-            }
-        }
-
+        // ==================== 7. 食材詳情彈窗、圖鑑解鎖卡與農舍寫真牆 ====================
         function openIngredientDetail(itemId) {
-            const item = state.ingredients[itemId] || state.customIngredients.find(i => i.id === itemId);
+            const item = findIngredientById(itemId);
             if (!item) return;
 
             const triedCount = item.history.length;
@@ -1344,19 +1550,20 @@
             const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
             const headerVisual = isUnlocked
                 ? (normalizedImgUrl
-                    ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-12 h-12 object-contain rounded-xl border border-cream-text bg-white p-0.5"><span style="display:none;" class="text-3xl">🎴</span>`
+                    ? `<img src="${escapeHtml(normalizedImgUrl)}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-12 h-12 object-contain rounded-xl border border-cream-text bg-white p-0.5"><span style="display:none;" class="text-3xl">🎴</span>`
                     : `<span class="text-3xl">🎴</span>`)
-                : `<span class="text-3xl">${item.seedEmoji}</span>`;
+                : `<span class="text-3xl">${escapeHtml(item.seedEmoji)}</span>`;
 
             let challengeCirclesHtml = '';
             for (let i = 0; i < 3; i++) {
                 const record = item.history[i];
                 if (record) {
+                    const rMeta = getReactionMeta(record.reaction);
                     challengeCirclesHtml += `
                         <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-dashed border-cream-primary bg-amber-50 flex flex-col items-center justify-center p-1 text-center shadow-inner rotate-[-3deg]">
                             <span class="text-[10px] font-extrabold text-cream-primary">第 ${i + 1} 天打卡</span>
                             <span class="text-xs font-bold text-cream-text truncate max-w-[84px]">${escapeHtml(record.date)}</span>
-                            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold mt-0.5 ${getReactionBadgeClass(record.reaction)}">${getReactionText(record.reaction)}</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold mt-0.5 ${rMeta.badge}">${rMeta.label}</span>
                         </div>
                     `;
                 } else {
@@ -1380,7 +1587,7 @@
                         </div>
                     </div>
                     <div class="flex items-center space-x-1.5">
-                        ${isUnlocked ? `<button type="button" onclick="closeModal(); openIngredientUnlockCardModal('${item.id}');" class="cream-btn px-2.5 py-1 bg-cream-yellow text-cream-text text-xs font-extrabold">🎴 圖鑑卡</button>` : ''}
+                        ${isUnlocked ? `<button type="button" onclick="closeModal(); openIngredientUnlockCardModal('${escapeHtml(item.id)}');" class="cream-btn px-2.5 py-1 bg-cream-yellow text-cream-text text-xs font-extrabold">🎴 圖鑑卡</button>` : ''}
                         <button onclick="closeModal()" class="cream-btn px-3 py-1 bg-white text-xs font-bold">✕ 關閉</button>
                     </div>
                 </div>
@@ -1404,7 +1611,7 @@
 
                     <div class="bg-white p-4 cream-box border-2 border-cream-text space-y-3">
                         <h4 class="font-extrabold text-cream-text text-xs">📝 新增食用記錄 </h4>
-                        <form onsubmit="handleIngredientRecordSubmit(event, '${item.id}')" class="space-y-3">
+                        <form onsubmit="handleIngredientRecordSubmit(event, '${escapeHtml(item.id)}')" class="space-y-3">
                             <div>
                                 <label class="block text-xs font-bold mb-1">選擇日期：</label>
                                 <input type="date" id="rec-date" value="${todayStr}" class="block w-full min-w-0 max-w-full box-border p-2 border-2 border-cream-text rounded-xl text-xs bg-cream-bg font-bold" required>
@@ -1416,10 +1623,7 @@
                             <div>
                                 <label class="block text-xs font-bold mb-1">過敏反應：</label>
                                 <select id="rec-reaction" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-cream-bg font-bold">
-                                    <option value="none">🟢 無過敏反應</option>
-                                    <option value="mild">🟡 輕微過敏反應 (輕微紅疹/流鼻水)</option>
-                                    <option value="moderate">🟠 中度過敏反應 (大量紅疹/嘔吐/腹瀉)</option>
-                                    <option value="severe">🔴 重度過敏反應 (嚴重過敏症狀)</option>
+                                    ${renderReactionOptions('none')}
                                 </select>
                             </div>
                             <div>
@@ -1438,26 +1642,12 @@
 
         function handleIngredientRecordSubmit(event, itemId) {
             event.preventDefault();
-            const item = state.ingredients[itemId] || state.customIngredients.find(i => i.id === itemId);
-            if (!item) return;
-
-            const prevCount = item.history.length;
-            const date = document.getElementById('rec-date').value;
-            const amount = document.getElementById('rec-amount').value;
-            const reaction = document.getElementById('rec-reaction').value;
-            const notes = document.getElementById('rec-notes').value;
-
-            item.history.push({ date, amount, reaction, notes });
-            const newCount = item.history.length;
-            saveState();
-            closeModal();
-
-            if (prevCount < 3 && newCount >= 3) {
-                openIngredientUnlockCardModal(item.id);
-            } else {
-                showToast(`🎉 成功記錄 ${item.name}！`);
-            }
-            renderView(router.currentView, router.currentParams || {});
+            addIngredientRecord(itemId, {
+                date: document.getElementById('rec-date').value,
+                amount: document.getElementById('rec-amount').value,
+                reaction: document.getElementById('rec-reaction').value,
+                notes: document.getElementById('rec-notes').value
+            }, '🎉 成功記錄');
         }
 
         function closeModal() {
@@ -1465,24 +1655,18 @@
         }
 
         function openIngredientUnlockCardModal(itemId) {
-            const item = state.ingredients[itemId] || state.customIngredients.find(i => i.id === itemId);
+            const item = findIngredientById(itemId);
             if (!item) return;
 
             const triedCount = item.history.length;
-            const latest = triedCount > 0 ? item.history[triedCount - 1] : { reaction: 'none' };
+            const latest = getLatestRecord(item.history) || { reaction: 'none' };
+            const rMeta = getReactionMeta(latest.reaction);
             const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
 
-            let lightBadge = `<span class="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-400"><span>🟢</span><span>無過敏</span></span>`;
-            if (latest.reaction === 'mild') {
-                lightBadge = `<span class="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-extrabold bg-yellow-100 text-yellow-800 border border-yellow-400"><span>🟡</span><span>輕微過敏</span></span>`;
-            } else if (latest.reaction === 'moderate') {
-                lightBadge = `<span class="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-200 text-amber-900 border border-amber-500"><span>🟠</span><span>中度過敏</span></span>`;
-            } else if (latest.reaction === 'severe') {
-                lightBadge = `<span class="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-extrabold bg-red-600 text-white border border-red-700"><span>🔴</span><span>重度過敏</span></span>`;
-            }
+            const lightBadge = `<span class="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-extrabold ${rMeta.unlockBadge}"><span>${rMeta.emoji}</span><span>${rMeta.label}</span></span>`;
 
             const cardImageHtml = normalizedImgUrl
-                ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" class="w-44 h-44 sm:w-52 sm:h-52 object-contain mx-auto rounded-2xl bg-white p-2 border-2 border-cream-text shadow-sm"><div style="display:none;" class="w-44 h-44 sm:w-52 sm:h-52 mx-auto rounded-2xl bg-white border-2 border-cream-text flex items-center justify-center text-6xl">🎴</div>`
+                ? `<img src="${escapeHtml(normalizedImgUrl)}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" class="w-44 h-44 sm:w-52 sm:h-52 object-contain mx-auto rounded-2xl bg-white p-2 border-2 border-cream-text shadow-sm"><div style="display:none;" class="w-44 h-44 sm:w-52 sm:h-52 mx-auto rounded-2xl bg-white border-2 border-cream-text flex items-center justify-center text-6xl">🎴</div>`
                 : `<div class="w-44 h-44 sm:w-52 sm:h-52 mx-auto rounded-2xl bg-white border-2 border-cream-text flex items-center justify-center text-6xl shadow-sm">🎴</div>`;
 
             const unlockContent = document.getElementById('unlock-card-content');
@@ -1534,7 +1718,7 @@
                 <div class="space-y-4">
                     <div class="relative w-full rounded-2xl overflow-hidden shadow-sm bg-gradient-to-br from-amber-100 via-orange-50 to-cream-secondary/40 flex items-center justify-center">
                         ${cottageBannerUrl ? `
-                            <img src="${cottageBannerUrl}" alt="農舍成就寫真牆"
+                            <img src="${escapeHtml(cottageBannerUrl)}" alt="農舍成就寫真牆"
                                  onerror="this.style.display='none'; this.parentElement.classList.add('h-44');"
                                  class="w-full h-auto block">
                         ` : '<div class="h-44"></div>'}
@@ -1562,12 +1746,12 @@
                 const polaroidData = state.polaroids[ach.id] || {};
                 const imgSrc = normalizeCloudImageUrl(polaroidData.imageUrl || '');
                 const photoImg = imgSrc
-                    ? `<img src="${imgSrc}" onerror="this.onerror=null;this.src='https://placehold.co/300x300/E6CCB2/423830?text=${encodeURIComponent(ach.title)}';" class="w-full aspect-square object-cover border-2 border-cream-text rounded bg-cream-secondary/30">`
+                    ? `<img src="${escapeHtml(imgSrc)}" onerror="this.onerror=null;this.src='https://placehold.co/300x300/E6CCB2/423830?text=${encodeURIComponent(ach.title)}';" class="w-full aspect-square object-cover border-2 border-cream-text rounded bg-cream-secondary/30">`
                     : `<div class="w-full aspect-square bg-cream-secondary/30 border-2 border-cream-text rounded flex items-center justify-center text-4xl">${ach.icon}</div>`;
 
                 const clickAction = isUnlocked
                     ? `openPolaroidEditModal('${ach.id}')`
-                    : `showToast('🔒 尚未解鎖「${ach.title}」：${ach.desc}')`;
+                    : `showToast('🔒 尚未解鎖「${escapeHtml(ach.title)}」：${escapeHtml(ach.desc)}')`;
 
                 html += `
                     <div class="polaroid cursor-pointer ${isUnlocked ? '' : 'opacity-55 grayscale'}" onclick="${clickAction}">
@@ -1578,8 +1762,8 @@
                             </span>
                         </div>
                         <div class="mt-2 text-center">
-                            <div class="font-extrabold text-xs text-cream-text truncate">${ach.title}</div>
-                            <div class="text-[10px] text-cream-muted mt-0.5">${isUnlocked ? (polaroidData.date || '點擊上傳寫真 📸') : '🔒 未解鎖'}</div>
+                            <div class="font-extrabold text-xs text-cream-text truncate">${escapeHtml(ach.title)}</div>
+                            <div class="text-[10px] text-cream-muted mt-0.5">${isUnlocked ? (escapeHtml(polaroidData.date) || '點擊上傳寫真 📸') : '🔒 未解鎖'}</div>
                         </div>
                     </div>
                 `;
@@ -1591,7 +1775,9 @@
 
         function openPolaroidEditModal(achId) {
             const ach = ACHIEVEMENTS_LIST.find(a => a.id === achId);
+            if (!ach) return;
             const currentData = state.polaroids[achId] || { imageUrl: '', date: getLocalDateStr() };
+            const safePreviewUrl = normalizeCloudImageUrl(currentData.imageUrl || '');
 
             const modalContent = document.getElementById('modal-content');
             modalContent.innerHTML = `
@@ -1600,8 +1786,8 @@
                     <button onclick="closeModal()" class="cream-btn px-3 py-1 bg-white text-xs font-bold">✕ 關閉</button>
                 </div>
                 <div class="bg-cream-yellow/40 p-3 rounded-xl border border-cream-text/20 mb-4 text-center">
-                    <p class="font-extrabold text-sm">${ach.icon} ${ach.title}</p>
-                    <p class="text-xs text-cream-muted mt-0.5">${ach.desc}</p>
+                    <p class="font-extrabold text-sm">${ach.icon} ${escapeHtml(ach.title)}</p>
+                    <p class="text-xs text-cream-muted mt-0.5">${escapeHtml(ach.desc)}</p>
                 </div>
                 <form onsubmit="savePolaroid(event, '${achId}')" class="space-y-3">
                     <div>
@@ -1615,30 +1801,18 @@
                         <input type="text" id="polaroid-url" value="${escapeHtml(currentData.imageUrl)}" placeholder="貼上雲端連結或選擇相簿照片" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white">
                     </div>
 
-                    <div id="polaroid-preview-box" class="${currentData.imageUrl ? '' : 'hidden'} flex justify-center">
-                        <img id="polaroid-preview-img" src="${currentData.imageUrl}" class="w-28 h-28 object-cover rounded-xl border-2 border-cream-text shadow-sm">
+                    <div id="polaroid-preview-box" class="${safePreviewUrl ? '' : 'hidden'} flex justify-center">
+                        <img id="polaroid-preview-img" src="${escapeHtml(safePreviewUrl)}" class="w-28 h-28 object-cover rounded-xl border-2 border-cream-text shadow-sm">
                     </div>
 
                     <div>
                         <label class="block text-xs font-bold mb-1">達成紀念日期</label>
-                        <input type="date" id="polaroid-date" value="${currentData.date}" required class="block w-full min-w-0 max-w-full box-border p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
+                        <input type="date" id="polaroid-date" value="${escapeHtml(currentData.date)}" required class="block w-full min-w-0 max-w-full box-border p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
                     </div>
                     <button type="submit" class="w-full bg-cream-primary text-white font-extrabold py-2.5 cream-btn text-sm">💾 儲存照片</button>
                 </form>
             `;
             document.getElementById('modal-container').classList.remove('hidden');
-        }
-
-        function normalizeCloudImageUrl(url) {
-            if (!url) return '';
-            const trimmed = url.trim();
-            const driveMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/) ||
-                               trimmed.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/) ||
-                               trimmed.match(/drive\.google\.com\/uc\?(?:export=[^&]+&)?id=([a-zA-Z0-9_-]+)/);
-            if (driveMatch && driveMatch[1]) {
-                return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
-            }
-            return trimmed;
         }
 
         function compressImageFile(file, maxSize = 600, quality = 0.78) {
@@ -1680,6 +1854,7 @@
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({
                     action: 'upload_image',
+                    secret: (state.gasSecret || '').trim(),
                     base64: base64DataUrl,
                     mimeType: 'image/jpeg',
                     fileName: `${prefix}_${Date.now()}.jpg`
@@ -1689,57 +1864,61 @@
             if (!response.ok) throw new Error('雲端上傳回應異常');
             const result = await response.json();
             if (result.status === 'ok' && result.imageUrl) {
-                return result.imageUrl;
+                return sanitizeUrl(result.imageUrl) || base64DataUrl;
             }
             throw new Error(result.message || '雲端硬碟未回傳網址');
         }
 
-        async function handlePolaroidFileUpload(event) {
-            const file = event.target.files[0];
+        // 統一單張圖片壓縮、預覽與雲端上傳流程
+        async function processAndUploadImage(file, { maxSize, quality, prefix, inputId, previewImgId, previewBoxId, loadingMsg, successMsg }) {
             if (!file) return;
             try {
-                showToast('⏳ 正在壓縮並上傳至 Google 雲端硬碟...');
-                const compressedBase64 = await compressImageFile(file, 720, 0.8);
-                
-                const previewBox = document.getElementById('polaroid-preview-box');
-                const previewImg = document.getElementById('polaroid-preview-img');
-                if (previewBox && previewImg) {
+                showToast(loadingMsg);
+                const compressedBase64 = await compressImageFile(file, maxSize, quality);
+                const previewBox = previewBoxId ? document.getElementById(previewBoxId) : null;
+                const previewImg = previewImgId ? document.getElementById(previewImgId) : null;
+                if (previewImg) {
                     previewImg.src = compressedBase64;
-                    previewBox.classList.remove('hidden');
+                    previewImg.classList.remove('hidden');
                 }
+                if (previewBox) previewBox.classList.remove('hidden');
 
-                const cloudImageUrl = await uploadImageToCloudDrive(compressedBase64, 'polaroid');
-                document.getElementById('polaroid-url').value = cloudImageUrl;
+                const cloudImageUrl = await uploadImageToCloudDrive(compressedBase64, prefix);
+                const inputEl = document.getElementById(inputId);
+                if (inputEl) inputEl.value = cloudImageUrl;
                 if (previewImg) previewImg.src = cloudImageUrl;
 
-                showToast('☁️ 相片已存入雲端硬碟！請點擊「儲存照片」同步');
+                showToast(successMsg);
             } catch (err) {
                 console.error(err);
                 showToast('⚠️ 雲端上傳失敗（請確認 GAS 已建立新版本並授權雲端硬碟權限）');
             }
         }
 
-        async function handleOwnerAvatarFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            try {
-                showToast('⏳ 正在上傳寶寶頭像至 Google 雲端硬碟...');
-                const compressedBase64 = await compressImageFile(file, 400, 0.82);
-                const previewImg = document.getElementById('owner-avatar-preview');
-                if (previewImg) {
-                    previewImg.src = compressedBase64;
-                    previewImg.classList.remove('hidden');
-                }
+        function handlePolaroidFileUpload(event) {
+            processAndUploadImage(event.target.files[0], {
+                maxSize: 720,
+                quality: 0.8,
+                prefix: 'polaroid',
+                inputId: 'polaroid-url',
+                previewImgId: 'polaroid-preview-img',
+                previewBoxId: 'polaroid-preview-box',
+                loadingMsg: '⏳ 正在壓縮並上傳至 Google 雲端硬碟...',
+                successMsg: '☁️ 相片已存入雲端硬碟！請點擊「儲存照片」同步'
+            });
+        }
 
-                const cloudImageUrl = await uploadImageToCloudDrive(compressedBase64, 'avatar');
-                document.getElementById('owner-avatar').value = cloudImageUrl;
-                if (previewImg) previewImg.src = cloudImageUrl;
-
-                showToast('☁️ 頭像已存入雲端硬碟');
-            } catch (err) {
-                console.error(err);
-                showToast('⚠️ 頭像上傳失敗（請確認 GAS 已建立新版本並授權雲端硬碟權限）');
-            }
+        function handleOwnerAvatarFileUpload(event) {
+            processAndUploadImage(event.target.files[0], {
+                maxSize: 400,
+                quality: 0.82,
+                prefix: 'avatar',
+                inputId: 'owner-avatar',
+                previewImgId: 'owner-avatar-preview',
+                previewBoxId: null,
+                loadingMsg: '⏳ 正在上傳寶寶頭像至 Google 雲端硬碟...',
+                successMsg: '☁️ 頭像已存入雲端硬碟'
+            });
         }
 
         function savePolaroid(event, achId) {
@@ -1754,7 +1933,7 @@
             renderView('cottage');
         }
 
-        // ==================== 7. 快速新增 & 自訂食材 Modal ====================
+        // ==================== 8. 快速新增 & 自訂食材 Modal ====================
         function openQuickAddModal() {
             const modalContent = document.getElementById('modal-content');
             modalContent.innerHTML = `
@@ -1798,10 +1977,7 @@
                     <div>
                         <label class="block text-xs font-bold mb-1">過敏反應</label>
                         <select id="quick-reaction" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
-                            <option value="none">🟢 無過敏反應</option>
-                            <option value="mild">🟡 輕微過敏反應 (輕微紅疹/流鼻水)</option>
-                            <option value="moderate">🟠 中度過敏反應 (大量紅疹/嘔吐/腹瀉)</option>
-                            <option value="severe">🔴 重度過敏反應 (嚴重過敏症狀)</option>
+                            ${renderReactionOptions('none')}
                         </select>
                     </div>
 
@@ -1822,16 +1998,14 @@
         function updateQuickFoodOptions() {
             const cat = document.getElementById('quick-cat').value;
             const foodSelect = document.getElementById('quick-food');
-            const official = Object.values(state.ingredients).filter(i => i.category === cat);
-            const custom = state.customIngredients.filter(i => i.category === cat);
-            const list = [...official, ...custom];
+            const list = getAllIngredients().filter(i => i.category === cat);
 
             if (list.length === 0) {
                 foodSelect.innerHTML = `<option value="">(此分類目前無食材)</option>`;
                 updateQuickAddCardBtn();
                 return;
             }
-            foodSelect.innerHTML = list.map(item => `<option value="${item.id}">${escapeHtml(item.name)} (已吃 ${item.history.length} 次)</option>`).join('');
+            foodSelect.innerHTML = list.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} (已吃 ${item.history.length} 次)</option>`).join('');
             updateQuickAddCardBtn();
         }
 
@@ -1839,7 +2013,7 @@
             const foodSelect = document.getElementById('quick-food');
             const cardBtn = document.getElementById('quick-view-card-btn');
             if (!foodSelect || !cardBtn) return;
-            const item = state.ingredients[foodSelect.value] || state.customIngredients.find(i => i.id === foodSelect.value);
+            const item = findIngredientById(foodSelect.value);
             if (item && item.history.length >= 3) {
                 cardBtn.classList.remove('hidden');
             } else {
@@ -1857,26 +2031,12 @@
         function handleQuickAddSubmit(event) {
             event.preventDefault();
             const foodId = document.getElementById('quick-food').value;
-            let item = state.ingredients[foodId] || state.customIngredients.find(i => i.id === foodId);
-            if (!item) return;
-
-            const prevCount = item.history.length;
-            const date = document.getElementById('quick-date').value;
-            const amount = document.getElementById('quick-amount').value;
-            const reaction = document.getElementById('quick-reaction').value;
-            const notes = document.getElementById('quick-notes').value;
-
-            item.history.push({ date, amount, reaction, notes });
-            const newCount = item.history.length;
-            saveState();
-            closeModal();
-
-            if (prevCount < 3 && newCount >= 3) {
-                openIngredientUnlockCardModal(item.id);
-            } else {
-                showToast(`⚡ 已快速記錄：${item.name}！`);
-            }
-            renderView(router.currentView, router.currentParams || {});
+            addIngredientRecord(foodId, {
+                date: document.getElementById('quick-date').value,
+                amount: document.getElementById('quick-amount').value,
+                reaction: document.getElementById('quick-reaction').value,
+                notes: document.getElementById('quick-notes').value
+            }, '⚡ 已快速記錄：');
         }
 
         function openCustomIngredientModal() {
@@ -1928,7 +2088,7 @@
             const name = document.getElementById('cust-name').value.trim();
             const nameEn = document.getElementById('cust-name-en').value.trim();
             const category = document.getElementById('cust-cat').value;
-            const imageUrl = document.getElementById('cust-img-url').value.trim();
+            const imageUrl = normalizeCloudImageUrl(document.getElementById('cust-img-url').value.trim());
             const prep = document.getElementById('cust-prep').value.trim() || '爸爸媽媽愛心自製副食品！';
             const id = 'custom_' + Date.now();
 
@@ -1941,7 +2101,7 @@
             router.navigate('section', { category });
         }
 
-        // ==================== 8. 農場主人設定頁面 ====================
+        // ==================== 9. 農場主人設定頁面 ====================
         function renderOwnerView() {
             const cleanAvatar = normalizeCloudImageUrl(state.owner.avatarUrl);
             const activeUrl = getActiveGasUrl();
@@ -1976,7 +2136,7 @@
 
                             <!-- 寶寶頭像設定 -->
                             <div class="space-y-2 pt-1">
-                                <label class="block text-xs font-extrabold">寶寶頭像（相簿上傳或圖片網址）：</label>
+                                <label class="block text-xs font-extrabold">寶寶頭像（相簿上傳或圖片網址，清空即恢復預設）：</label>
                                 <div class="flex items-center space-x-3">
                                     <img id="owner-avatar-preview" src="${escapeHtml(cleanAvatar)}" class="${cleanAvatar ? '' : 'hidden'} w-14 h-14 rounded-full object-cover border-2 border-cream-text bg-white">
                                     <label class="flex-1 text-center bg-cream-secondary hover:bg-cream-secondary/80 text-cream-text font-extrabold py-2 cream-btn text-xs cursor-pointer">
@@ -1992,16 +2152,17 @@
                             </button>
                         </form>
 
-                        <!-- 單一 Google 試算表 (GAS) 雲端同步區塊 -->
+                        <!-- Google 試算表 (GAS) 雲端同步區塊 -->
                         <div class="border-t-2 border-dashed border-cream-text/30 pt-4 mt-4 space-y-2.5">
                             <div class="flex items-center justify-between">
                                 <h4 class="font-extrabold text-xs text-cream-text">☁️ Google 試算表 (GAS) 雲端同步</h4>
                                 ${statusBadge}
                             </div>
                             <p class="text-[11px] text-cream-muted leading-relaxed">
-                                貼上您部署的 GAS Web App 網址，即可同時同步，留空則僅儲存在本機，不會進行任何雲端連線。
+                                貼上您部署的 GAS Web App 網址，即可全家人同步紀錄，留空則僅儲存在本機。
                             </p>
                             <input type="url" id="gas-url-input" value="${escapeHtml(state.gasUrl || '')}" placeholder="貼上 https://script.google.com/macros/s/.../exec" class="w-full p-2.5 border-2 border-cream-text rounded-xl text-xs bg-cream-bg">
+                            <input type="password" id="gas-secret-input" value="${escapeHtml(state.gasSecret || '')}" placeholder="🔒 家庭同步通關密語（選填，配合 GAS 驗證）" class="w-full p-2.5 border-2 border-cream-text rounded-xl text-xs bg-cream-bg">
                             <div class="flex gap-2">
                                 <button type="button" onclick="saveAndSyncGasUrl()" class="flex-1 bg-cream-secondary hover:bg-cream-secondary/80 text-cream-text font-extrabold py-2.5 cream-btn text-xs">
                                     🔄 儲存網址並立即同步
@@ -2024,15 +2185,14 @@
             state.owner.nameEn = document.getElementById('owner-name-en').value;
             state.owner.birthDate = document.getElementById('owner-birth').value;
             const inputUrl = document.getElementById('owner-avatar').value.trim();
-            if (inputUrl) {
-                state.owner.avatarUrl = normalizeCloudImageUrl(inputUrl);
-            }
+            state.owner.avatarUrl = inputUrl ? normalizeCloudImageUrl(inputUrl) : '';
+
             const gasEl = document.getElementById('gas-url-input');
-            if (gasEl) {
-                state.gasUrl = gasEl.value.trim();
-                state.ingredientsGasUrl = state.gasUrl;
-            }
-            
+            const secretEl = document.getElementById('gas-secret-input');
+            if (gasEl) state.gasUrl = sanitizeUrl(gasEl.value.trim());
+            if (secretEl) state.gasSecret = secretEl.value.trim();
+            delete state.ingredientsGasUrl;
+
             saveState();
             showToast('👒 農場主人設定已更新！');
             router.navigate('home');
@@ -2040,26 +2200,28 @@
 
         function saveAndSyncGasUrl() {
             const inputEl = document.getElementById('gas-url-input');
-            const url = inputEl ? inputEl.value.trim() : '';
+            const secretEl = document.getElementById('gas-secret-input');
+            const url = sanitizeUrl(inputEl ? inputEl.value.trim() : '');
             if (!url || !url.startsWith('http')) {
                 showToast('⚠️ 請輸入有效的 Google 試算表 GAS 網址！');
                 return;
             }
             state.gasUrl = url;
-            state.ingredientsGasUrl = url;
+            if (secretEl) state.gasSecret = secretEl.value.trim();
+            delete state.ingredientsGasUrl;
             saveStateSilently();
             syncAllCloudData(true);
         }
 
         function clearGasUrl() {
             state.gasUrl = '';
-            state.ingredientsGasUrl = '';
+            delete state.ingredientsGasUrl;
             saveStateSilently();
             showToast('⚪ 已清除雲端網址，切換為單機模式');
             renderView('owner');
         }
 
-        // ==================== 9. 食材圖鑑 (雙列進階篩選 + 自訂食材安全刪除) ====================
+        // ==================== 10. 食材圖鑑 (雙列進階篩選 + 自訂食材安全刪除) ====================
         let encFilterCat = 'all';
         let encFilterStatus = 'all';
 
@@ -2088,12 +2250,12 @@
                 { id: 'no_allergy', label: '無過敏' }
             ];
 
-            let allItems = [
+            const allItems = [
                 ...Object.values(state.ingredients).map(i => ({ ...i, isCustom: false })),
                 ...state.customIngredients.map(i => ({ ...i, isCustom: true }))
             ];
 
-            let filtered = allItems.filter(item => {
+            const filtered = allItems.filter(item => {
                 if (encFilterCat === 'custom') {
                     if (!item.isCustom) return false;
                 } else if (encFilterCat !== 'all' && item.category !== encFilterCat) {
@@ -2101,7 +2263,8 @@
                 }
 
                 const triedCount = item.history.length;
-                const latestReaction = triedCount > 0 ? item.history[item.history.length - 1].reaction : null;
+                const latest = getLatestRecord(item.history);
+                const latestReaction = latest ? latest.reaction : null;
 
                 if (encFilterStatus === 'tried' && triedCount === 0) return false;
                 if (encFilterStatus === 'untried' && triedCount > 0) return false;
@@ -2111,32 +2274,32 @@
                 return true;
             });
 
-            let catButtonsHtml = categories.map(c => {
+            const catButtonsHtml = categories.map(c => {
                 const isActive = encFilterCat === c.id;
                 const btnClass = isActive ? 'bg-cream-primary text-white' : 'bg-white text-cream-text hover:bg-cream-bg';
                 return `<button onclick="setEncFilter('cat', '${c.id}')" class="px-3 py-1.5 rounded-full text-xs font-bold border-2 border-cream-text shadow-sm ${btnClass} transition">${c.label}</button>`;
             }).join('');
 
-            let statusButtonsHtml = statuses.map(s => {
+            const statusButtonsHtml = statuses.map(s => {
                 const isActive = encFilterStatus === s.id;
                 const btnClass = isActive ? 'bg-cream-primary text-white' : 'bg-white text-cream-text hover:bg-cream-bg';
                 return `<button onclick="setEncFilter('status', '${s.id}')" class="px-3 py-1.5 rounded-full text-xs font-bold border-2 border-cream-text shadow-sm ${btnClass} transition">${s.label}</button>`;
             }).join('');
 
-            let itemsHtml = filtered.map(item => {
+            const itemsHtml = filtered.map(item => {
                 const triedCount = item.history.length;
                 const isUnlocked = triedCount >= 3;
                 const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
-                let displayVisual = isUnlocked
+                const displayVisual = isUnlocked
                     ? (normalizedImgUrl
-                        ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-2xl">🎴</span>`
+                        ? `<img src="${escapeHtml(normalizedImgUrl)}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-2xl">🎴</span>`
                         : `<span class="text-2xl">🎴</span>`)
-                    : item.seedEmoji;
-                let bgClass = isUnlocked ? "bg-emerald-50/70 border-emerald-500" : "bg-white border-cream-text";
+                    : escapeHtml(item.seedEmoji);
+                const bgClass = isUnlocked ? "bg-emerald-50/70 border-emerald-500" : "bg-white border-cream-text";
 
                 const deleteBtnHtml = item.isCustom ? `
                     <button type="button"
-                            onclick="event.stopPropagation(); confirmDeleteCustomIngredient('${item.id}')"
+                            onclick="event.stopPropagation(); confirmDeleteCustomIngredient('${escapeHtml(item.id)}')"
                             title="刪除此自訂食材"
                             class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-100 hover:bg-red-500 text-red-600 hover:text-white border border-red-300 flex items-center justify-center text-xs font-bold transition shadow-sm">
                         🗑️
@@ -2144,7 +2307,7 @@
                 ` : '';
 
                 return `
-                    <div onclick="openIngredientDetail('${item.id}')" class="relative ${bgClass} cream-box p-3 cursor-pointer flex items-center space-x-3 hover:scale-[1.01] transition">
+                    <div onclick="openIngredientDetail('${escapeHtml(item.id)}')" class="relative ${bgClass} cream-box p-3 cursor-pointer flex items-center space-x-3 hover:scale-[1.01] transition">
                         ${deleteBtnHtml}
                         <div class="text-3xl p-1.5 bg-white rounded-2xl border-2 border-cream-text shadow-sm flex items-center justify-center w-12 h-12 shrink-0 overflow-hidden">
                             ${displayVisual}
@@ -2187,31 +2350,37 @@
             `;
         }
 
-        function confirmDeleteCustomIngredient(customId) {
-            const target = state.customIngredients.find(i => i.id === customId);
-            if (!target) return;
-
-            const recordCount = target.history ? target.history.length : 0;
+        function openConfirmDialog({ icon = '🗑️', title, bodyHtml, confirmLabel = '確定刪除', onConfirmCode }) {
             const modalContent = document.getElementById('modal-content');
             modalContent.innerHTML = `
                 <div class="text-center space-y-4 py-2">
-                    <div class="text-4xl">🗑️</div>
-                    <h3 class="text-lg font-extrabold text-cream-text">確定要刪除「${escapeHtml(target.name)}」嗎？</h3>
-                    <p class="text-xs text-cream-muted leading-relaxed">
-                        這是您自行新增的食材${recordCount > 0 ? `，目前包含 <strong>${recordCount} 筆</strong>試吃紀錄，刪除後紀錄也會一併移除` : ''}。<br>
-                        此操作無法復原喔！
-                    </p>
+                    <div class="text-4xl">${icon}</div>
+                    <h3 class="text-lg font-extrabold text-cream-text">${escapeHtml(title)}</h3>
+                    <div class="text-xs text-cream-muted leading-relaxed">${bodyHtml}</div>
                     <div class="flex space-x-3 pt-2">
                         <button type="button" onclick="closeModal()" class="flex-1 bg-white hover:bg-cream-bg text-cream-text font-extrabold py-2.5 cream-btn text-xs">
                             取消保留
                         </button>
-                        <button type="button" onclick="executeDeleteCustomIngredient('${target.id}')" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-extrabold py-2.5 cream-btn text-xs">
-                            確定刪除
+                        <button type="button" onclick="${onConfirmCode}" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-extrabold py-2.5 cream-btn text-xs">
+                            ${escapeHtml(confirmLabel)}
                         </button>
                     </div>
                 </div>
             `;
             document.getElementById('modal-container').classList.remove('hidden');
+        }
+
+        function confirmDeleteCustomIngredient(customId) {
+            const target = state.customIngredients.find(i => i.id === customId);
+            if (!target) return;
+            const recordCount = target.history ? target.history.length : 0;
+            openConfirmDialog({
+                icon: '🗑️',
+                title: `確定要刪除「${target.name}」嗎？`,
+                bodyHtml: `這是您自行新增的食材${recordCount > 0 ? `，目前包含 <strong>${recordCount} 筆</strong>試吃紀錄，刪除後紀錄也會一併移除` : ''}。<br>此操作無法復原喔！`,
+                confirmLabel: '確定刪除',
+                onConfirmCode: `executeDeleteCustomIngredient('${escapeHtml(target.id)}')`
+            });
         }
 
         function executeDeleteCustomIngredient(customId) {
@@ -2226,7 +2395,7 @@
             renderView('encyclopedia');
         }
 
-        // ==================== 10. 週曆 & 全部歷史紀錄管理 ====================
+        // ==================== 11. 週曆 & 全部歷史紀錄管理 ====================
         let weekOffset = 0;
 
         function changeWeek(delta) {
@@ -2307,11 +2476,9 @@
                                     ${dayRecords.length > 0 ? `
                                         <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
                                             ${dayRecords.map(r => {
-                                                let badgeClass = 'bg-emerald-600 text-white';
-                                                if (r.reaction === 'mild' || r.reaction === 'moderate') badgeClass = 'bg-amber-400 text-white';
-                                                if (r.reaction === 'severe') badgeClass = 'bg-red-600 text-white';
+                                                const badgeClass = getReactionMeta(r.reaction).cal;
                                                 return `
-                                                    <button type="button" onclick="openHistoryManagerModal('${r.ingredientId}', ${r.historyIndex})" title="點擊編輯或刪除此筆紀錄"
+                                                    <button type="button" onclick="openHistoryManagerModal('${escapeHtml(r.ingredientId)}', ${r.historyIndex})" title="點擊編輯或刪除此筆紀錄"
                                                         class="${badgeClass} text-xs font-extrabold px-2.5 py-1 rounded-xl shadow-sm hover:opacity-90 active:scale-95 transition text-left">
                                                         ${escapeHtml(r.ingredientName)}${r.amount ? ` (${escapeHtml(r.amount)})` : ''}
                                                     </button>
@@ -2342,7 +2509,13 @@
 
         function setHistorySearch(val) {
             historyManagerSearch = val;
-            renderHistoryManagerContent();
+            // 僅重繪清單區域，避免輸入框失焦導致中文注音組字中斷
+            const listContainer = document.getElementById('history-list-body');
+            if (listContainer) {
+                listContainer.innerHTML = renderHistoryListBody();
+            } else {
+                renderHistoryManagerContent();
+            }
         }
 
         function startEditHistoryRecord(ingredientId, historyIndex) {
@@ -2357,20 +2530,16 @@
 
         function saveEditedHistoryRecord(event, ingredientId, historyIndex) {
             event.preventDefault();
-            const item = state.ingredients[ingredientId] || state.customIngredients.find(i => i.id === ingredientId);
+            const item = findIngredientById(ingredientId);
             if (!item || !item.history[historyIndex]) return;
 
-            const newDate = document.getElementById('edit-rec-date').value;
-            const newAmount = document.getElementById('edit-rec-amount').value;
-            const newReaction = document.getElementById('edit-rec-reaction').value;
-            const newNotes = document.getElementById('edit-rec-notes').value;
-
             item.history[historyIndex] = {
-                date: newDate,
-                amount: newAmount,
-                reaction: newReaction,
-                notes: newNotes
+                date: document.getElementById('edit-rec-date').value,
+                amount: document.getElementById('edit-rec-amount').value,
+                reaction: document.getElementById('edit-rec-reaction').value,
+                notes: document.getElementById('edit-rec-notes').value
             };
+            sortHistoryByDate(item.history);
 
             editingHistoryTarget = null;
             saveState();
@@ -2382,7 +2551,7 @@
         }
 
         function deleteHistoryRecord(ingredientId, historyIndex) {
-            const item = state.ingredients[ingredientId] || state.customIngredients.find(i => i.id === ingredientId);
+            const item = findIngredientById(ingredientId);
             if (!item || !item.history[historyIndex]) return;
 
             item.history.splice(historyIndex, 1);
@@ -2397,7 +2566,7 @@
             }
         }
 
-        function renderHistoryManagerContent() {
+        function renderHistoryListBody() {
             const allRecords = getAllRecords().slice().sort((a, b) => b.date.localeCompare(a.date));
             const keyword = historyManagerSearch.trim().toLowerCase();
             const filtered = keyword
@@ -2408,17 +2577,101 @@
                 )
                 : allRecords;
 
-            const reactionLabels = {
-                none: { text: '🟢 無過敏', cls: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
-                mild: { text: '🟡 輕微過敏', cls: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
-                moderate: { text: '🟠 中度過敏', cls: 'bg-amber-200 text-amber-900 border-amber-400' },
-                severe: { text: '🔴 重度過敏', cls: 'bg-red-600 text-white border-red-700' }
-            };
+            if (filtered.length === 0) {
+                return `
+                    <div class="text-center py-8 text-xs text-cream-muted bg-white/70 rounded-2xl border border-dashed border-cream-border">
+                        沒有符合條件的歷史紀錄 🌱
+                    </div>
+                `;
+            }
 
+            return `
+                <div class="space-y-2.5 max-h-[58vh] overflow-y-auto pr-0.5">
+                    ${filtered.map(r => {
+                        const isEditing = editingHistoryTarget &&
+                            editingHistoryTarget.ingredientId === r.ingredientId &&
+                            editingHistoryTarget.historyIndex === r.historyIndex;
+
+                        if (isEditing) {
+                            return `
+                                <form onsubmit="saveEditedHistoryRecord(event, '${escapeHtml(r.ingredientId)}', ${r.historyIndex})"
+                                    class="bg-cream-yellow/35 border-2 border-cream-primary rounded-2xl p-3 space-y-2.5">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-extrabold text-sm text-cream-text">✏️ 編輯：${escapeHtml(r.ingredientName)} (第 ${r.historyIndex + 1} 次)</span>
+                                        <button type="button" onclick="cancelEditHistoryRecord()" class="text-xs font-bold text-cream-muted underline">取消</button>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div class="min-w-0">
+                                            <label class="block text-[11px] font-bold mb-0.5">日期</label>
+                                            <input type="date" id="edit-rec-date" value="${escapeHtml(r.date)}" required class="block w-full min-w-0 max-w-full box-border p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
+                                        </div>
+                                        <div class="min-w-0">
+                                            <label class="block text-[11px] font-bold mb-0.5">份量</label>
+                                            <input type="text" id="edit-rec-amount" value="${escapeHtml(r.amount || '')}" placeholder="如：30ml" class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-bold mb-0.5">過敏反應</label>
+                                        <select id="edit-rec-reaction" class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
+                                            ${renderReactionOptions(r.reaction)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-bold mb-0.5">備註</label>
+                                        <input type="text" id="edit-rec-notes" value="${escapeHtml(r.notes || '')}" placeholder="觀察心得..." class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white">
+                                    </div>
+                                    <div class="flex space-x-2 pt-1">
+                                        <button type="submit" class="flex-1 bg-cream-primary text-white font-extrabold py-2 cream-btn text-xs">💾 儲存修改</button>
+                                        <button type="button" onclick="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"
+                                            class="px-3 py-2 bg-red-100 text-red-700 border-2 border-red-400 rounded-xl text-xs font-extrabold">🗑️ 刪除</button>
+                                        <button type="button" style="display:none;" onclick="deleteHistoryRecord('${escapeHtml(r.ingredientId)}', ${r.historyIndex})"
+                                            class="px-3 py-2 bg-red-600 text-white border-2 border-cream-text rounded-xl text-xs font-extrabold">確定刪除？</button>
+                                    </div>
+                                </form>
+                            `;
+                        }
+
+                        const rMeta = getReactionMeta(r.reaction);
+                        return `
+                            <div class="bg-white border-2 border-cream-text/30 rounded-2xl p-3 flex items-start justify-between gap-2">
+                                <div class="space-y-1 min-w-0 flex-1">
+                                    <div class="flex items-center flex-wrap gap-1.5">
+                                        <span class="font-extrabold text-sm text-cream-text">${escapeHtml(r.ingredientName)}</span>
+                                        <span class="text-[10px] font-bold text-cream-muted bg-cream-bg px-2 py-0.5 rounded-full border border-cream-border">第 ${r.historyIndex + 1} 次</span>
+                                        <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${rMeta.badge}">${rMeta.emoji} ${rMeta.label}</span>
+                                    </div>
+                                    <div class="text-xs text-cream-muted font-bold">
+                                        📅 ${escapeHtml(r.date)}${r.amount ? ` ・ 🥣 ${escapeHtml(r.amount)}` : ''}
+                                    </div>
+                                    ${r.notes ? `<p class="text-xs text-cream-text/85 bg-cream-bg/80 px-2.5 py-1 rounded-lg">📝 ${escapeHtml(r.notes)}</p>` : ''}
+                                </div>
+                                <div class="flex flex-col space-y-1.5 shrink-0">
+                                    <button type="button" onclick="startEditHistoryRecord('${escapeHtml(r.ingredientId)}', ${r.historyIndex})"
+                                        class="px-2.5 py-1 bg-cream-secondary/50 hover:bg-cream-secondary border border-cream-text rounded-xl text-[11px] font-extrabold text-cream-text">
+                                        ✏️ 編輯
+                                    </button>
+                                    <button type="button" onclick="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                                        class="px-2.5 py-1 bg-red-50 hover:bg-red-100 border border-red-300 rounded-xl text-[11px] font-extrabold text-red-700">
+                                        🗑️ 刪除
+                                    </button>
+                                    <button type="button" style="display:none;" onclick="deleteHistoryRecord('${escapeHtml(r.ingredientId)}', ${r.historyIndex})"
+                                        class="px-2.5 py-1 bg-red-600 text-white border border-cream-text rounded-xl text-[11px] font-extrabold">
+                                        確定？
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        function renderHistoryManagerContent() {
+            const totalCount = getAllRecords().length;
             const modalContent = document.getElementById('modal-content');
             modalContent.innerHTML = `
                 <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-base sm:text-lg font-extrabold">📋 全部歷史紀錄管理 (${allRecords.length} 筆)</h3>
+                    <h3 class="text-base sm:text-lg font-extrabold">📋 全部歷史紀錄管理 (${totalCount} 筆)</h3>
                     <button onclick="closeModal()" class="cream-btn px-3 py-1 bg-white text-xs font-bold">✕ 關閉</button>
                 </div>
 
@@ -2428,96 +2681,13 @@
                         class="w-full p-2.5 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
                 </div>
 
-                ${filtered.length === 0 ? `
-                    <div class="text-center py-8 text-xs text-cream-muted bg-white/70 rounded-2xl border border-dashed border-cream-border">
-                        沒有符合條件的歷史紀錄 🌱
-                    </div>
-                ` : `
-                    <div class="space-y-2.5 max-h-[58vh] overflow-y-auto pr-0.5">
-                        ${filtered.map(r => {
-                            const isEditing = editingHistoryTarget &&
-                                editingHistoryTarget.ingredientId === r.ingredientId &&
-                                editingHistoryTarget.historyIndex === r.historyIndex;
-
-                            if (isEditing) {
-                                return `
-                                    <form onsubmit="saveEditedHistoryRecord(event, '${r.ingredientId}', ${r.historyIndex})"
-                                        class="bg-cream-yellow/35 border-2 border-cream-primary rounded-2xl p-3 space-y-2.5">
-                                        <div class="flex justify-between items-center">
-                                            <span class="font-extrabold text-sm text-cream-text">✏️ 編輯：${escapeHtml(r.ingredientName)} (第 ${r.historyIndex + 1} 次)</span>
-                                            <button type="button" onclick="cancelEditHistoryRecord()" class="text-xs font-bold text-cream-muted underline">取消</button>
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            <div class="min-w-0">
-                                                <label class="block text-[11px] font-bold mb-0.5">日期</label>
-                                                <input type="date" id="edit-rec-date" value="${r.date}" required class="block w-full min-w-0 max-w-full box-border p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
-                                            </div>
-                                            <div class="min-w-0">
-                                                <label class="block text-[11px] font-bold mb-0.5">份量</label>
-                                                <input type="text" id="edit-rec-amount" value="${escapeHtml(r.amount || '')}" placeholder="如：30ml" class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white">
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-bold mb-0.5">過敏反應</label>
-                                            <select id="edit-rec-reaction" class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
-                                                <option value="none" ${r.reaction === 'none' ? 'selected' : ''}>🟢 無過敏反應</option>
-                                                <option value="mild" ${r.reaction === 'mild' ? 'selected' : ''}>🟡 輕微過敏反應 (輕微紅疹/流鼻水)</option>
-                                                <option value="moderate" ${r.reaction === 'moderate' ? 'selected' : ''}>🟠 中度過敏反應 (大量紅疹/嘔吐/腹瀉)</option>
-                                                <option value="severe" ${r.reaction === 'severe' ? 'selected' : ''}>🔴 重度過敏反應 (嚴重過敏症狀)</option>
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label class="block text-[11px] font-bold mb-0.5">備註</label>
-                                            <input type="text" id="edit-rec-notes" value="${escapeHtml(r.notes || '')}" placeholder="觀察心得..." class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white">
-                                        </div>
-                                        <div class="flex space-x-2 pt-1">
-                                            <button type="submit" class="flex-1 bg-cream-primary text-white font-extrabold py-2 cream-btn text-xs">💾 儲存修改</button>
-                                            <button type="button" onclick="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"
-                                                class="px-3 py-2 bg-red-100 text-red-700 border-2 border-red-400 rounded-xl text-xs font-extrabold">🗑️ 刪除</button>
-                                            <button type="button" style="display:none;" onclick="deleteHistoryRecord('${r.ingredientId}', ${r.historyIndex})"
-                                                class="px-3 py-2 bg-red-600 text-white border-2 border-cream-text rounded-xl text-xs font-extrabold">確定刪除？</button>
-                                        </div>
-                                    </form>
-                                `;
-                            }
-
-                            const badge = reactionLabels[r.reaction] || reactionLabels.none;
-                            return `
-                                <div class="bg-white border-2 border-cream-text/30 rounded-2xl p-3 flex items-start justify-between gap-2">
-                                    <div class="space-y-1 min-w-0 flex-1">
-                                        <div class="flex items-center flex-wrap gap-1.5">
-                                            <span class="font-extrabold text-sm text-cream-text">${escapeHtml(r.ingredientName)}</span>
-                                            <span class="text-[10px] font-bold text-cream-muted bg-cream-bg px-2 py-0.5 rounded-full border border-cream-border">第 ${r.historyIndex + 1} 次</span>
-                                            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${badge.cls}">${badge.text}</span>
-                                        </div>
-                                        <div class="text-xs text-cream-muted font-bold">
-                                            📅 ${r.date}${r.amount ? ` ・ 🥣 ${escapeHtml(r.amount)}` : ''}
-                                        </div>
-                                        ${r.notes ? `<p class="text-xs text-cream-text/85 bg-cream-bg/80 px-2.5 py-1 rounded-lg">📝 ${escapeHtml(r.notes)}</p>` : ''}
-                                    </div>
-                                    <div class="flex flex-col space-y-1.5 shrink-0">
-                                        <button type="button" onclick="startEditHistoryRecord('${r.ingredientId}', ${r.historyIndex})"
-                                            class="px-2.5 py-1 bg-cream-secondary/50 hover:bg-cream-secondary border border-cream-text rounded-xl text-[11px] font-extrabold text-cream-text">
-                                            ✏️ 編輯
-                                        </button>
-                                        <button type="button" onclick="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                                            class="px-2.5 py-1 bg-red-50 hover:bg-red-100 border border-red-300 rounded-xl text-[11px] font-extrabold text-red-700">
-                                            🗑️ 刪除
-                                        </button>
-                                        <button type="button" style="display:none;" onclick="deleteHistoryRecord('${r.ingredientId}', ${r.historyIndex})"
-                                            class="px-2.5 py-1 bg-red-600 text-white border border-cream-text rounded-xl text-[11px] font-extrabold">
-                                            確定？
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `}
+                <div id="history-list-body">
+                    ${renderHistoryListBody()}
+                </div>
             `;
         }
 
-        // ==================== 11. 食用須知 & 過敏警示食材 ====================
+        // ==================== 12. 食用須知 & 過敏警示食材 ====================
         function renderGuidelinesView() {
             return `
                 <div class="space-y-4 max-w-2xl mx-auto">
@@ -2556,11 +2726,9 @@
         }
 
         function getAllergicIngredientsList() {
-            const all = [...Object.values(state.ingredients), ...state.customIngredients];
-            return all.filter(item => {
-                if (item.history.length === 0) return false;
-                const latest = item.history[item.history.length - 1];
-                return ['mild', 'moderate', 'severe'].includes(latest.reaction);
+            return getAllIngredients().filter(item => {
+                const latest = getLatestRecord(item.history);
+                return latest && ['mild', 'moderate', 'severe'].includes(latest.reaction);
             });
         }
 
@@ -2586,26 +2754,18 @@
             } else {
                 html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">`;
                 allergicList.forEach(item => {
-                    const latest = item.history[item.history.length - 1];
-                    let badge = '<span class="bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded-full text-xs font-extrabold">輕微過敏</span>';
-                    let cardBg = 'bg-yellow-50 border-yellow-600';
-                    if (latest.reaction === 'moderate') {
-                        badge = '<span class="bg-amber-300 text-amber-950 px-2 py-0.5 rounded-full text-xs font-extrabold">中度過敏</span>';
-                        cardBg = 'bg-amber-50 border-amber-700';
-                    }
-                    if (latest.reaction === 'severe') {
-                        badge = '<span class="bg-red-600 text-white px-2 py-0.5 rounded-full text-xs font-extrabold">重度過敏</span>';
-                        cardBg = 'bg-red-100 border-red-600';
-                    }
+                    const latest = getLatestRecord(item.history);
+                    const rMeta = getReactionMeta(latest.reaction);
+                    const badge = `<span class="${rMeta.badge} border px-2 py-0.5 rounded-full text-xs font-extrabold">${rMeta.label}</span>`;
 
                     html += `
-                        <div onclick="openIngredientDetail('${item.id}')" class="border-2 ${cardBg} rounded-2xl p-4 cursor-pointer shadow-sm flex items-center justify-between">
+                        <div onclick="openIngredientDetail('${escapeHtml(item.id)}')" class="border-2 ${rMeta.allergyCard} rounded-2xl p-4 cursor-pointer shadow-sm flex items-center justify-between">
                             <div>
                                 <div class="flex items-center space-x-2">
                                     <h3 class="font-extrabold text-base">${escapeHtml(item.name)}</h3>
                                     ${badge}
                                 </div>
-                                <p class="text-xs text-cream-muted mt-1">最近記錄日期：${latest.date}</p>
+                                <p class="text-xs text-cream-muted mt-1">最近記錄日期：${escapeHtml(latest.date)}</p>
                                 ${latest.notes ? `<p class="text-xs text-cream-text mt-1 bg-white/70 p-1.5 rounded-lg">備註：${escapeHtml(latest.notes)}</p>` : ''}
                             </div>
                             <span class="text-xs font-extrabold text-cream-primary underline ml-2">再次挑戰</span>
@@ -2619,25 +2779,18 @@
             return html;
         }
 
-        function escapeHtml(str) {
-            if (!str) return '';
-            return String(str)
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
+        // ==================== 13. 旅行紀錄與準備清單功能 ====================
+        function getTravelProgress(travel) {
+            let total = 0, checked = 0;
+            (travel.checklist || []).forEach(cat => {
+                (cat.items || []).forEach(it => {
+                    total++;
+                    if (it.checked) checked++;
+                });
+            });
+            return { total, checked, pct: total > 0 ? Math.round((checked / total) * 100) : 0 };
         }
 
-        // ==================== 12. 初始化執行 ====================
-        window.addEventListener('DOMContentLoaded', () => {
-            updateHeaderInfo();
-            checkAchievements();
-            router.navigate('home');
-            syncAllCloudData(false);
-        });
-
-        // ==================== 旅行紀錄與準備清單功能 ====================
         function renderTravelListView() {
             const sortedTravels = [...state.travels].sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
 
@@ -2652,14 +2805,7 @@
                        🧳 目前還沒有旅遊紀錄，點擊上方「➕ 新增旅遊紀錄」開始規劃第一趟親子旅行吧！
                    </div>`
                 : sortedTravels.map(t => {
-                    let total = 0, checked = 0;
-                    (t.checklist || []).forEach(cat => {
-                        cat.items.forEach(it => {
-                            total++;
-                            if (it.checked) checked++;
-                        });
-                    });
-                    const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+                    const { total, checked, pct } = getTravelProgress(t);
                     const typeBadge = t.type === 'international'
                         ? `<span class="bg-sky-100 text-sky-800 border border-sky-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full">🌏 國外旅遊</span>`
                         : `<span class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold px-2 py-0.5 rounded-full">🚗 國內旅遊</span>`;
@@ -2679,7 +2825,7 @@
                     ` : '';
 
                     return `
-                        <div onclick="openTravelDetail('${t.id}')" class="bg-white cream-box p-4 cursor-pointer hover:bg-cream-secondary/15 transition space-y-2.5">
+                        <div onclick="openTravelDetail('${escapeHtml(t.id)}')" class="bg-white cream-box p-4 cursor-pointer hover:bg-cream-secondary/15 transition space-y-2.5">
                             <div class="flex items-start justify-between gap-2">
                                 <div>
                                     <div class="flex items-center gap-2 flex-wrap">
@@ -2688,7 +2834,7 @@
                                     </div>
                                     <p class="text-xs text-cream-muted font-bold mt-1">📅 ${dateText}</p>
                                 </div>
-                                <button onclick="event.stopPropagation(); deleteTravelRecord('${t.id}')"
+                                <button onclick="event.stopPropagation(); confirmDeleteTravelRecord('${escapeHtml(t.id)}')"
                                         class="text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg border border-transparent hover:border-rose-200 font-bold"
                                         title="刪除旅遊紀錄">🗑️</button>
                             </div>
@@ -2710,7 +2856,6 @@
 
             return `
                 <div class="space-y-4 max-w-2xl mx-auto">
-                    <!-- 頂部標題與返回按鈕 -->
                     <div class="flex items-center justify-between">
                         <button onclick="router.navigate('farm_map')" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold">
                             🗺️ 返回地圖
@@ -2719,7 +2864,6 @@
                         <div class="w-16"></div>
                     </div>
 
-                    <!-- 日常出門必帶清單 -->
                     <div class="bg-white cream-box p-4 space-y-2">
                         <div class="flex items-center justify-between">
                             <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">👜 日常出門必帶清單</h3>
@@ -2730,7 +2874,6 @@
                         </div>
                     </div>
 
-                    <!-- 新增旅遊紀錄按鈕與展開表單 -->
                     <div class="space-y-3">
                         <button onclick="toggleNewTravelForm()" class="w-full cream-btn bg-cream-primary text-white py-2.5 text-sm font-extrabold flex items-center justify-center gap-1.5">
                             <span>${showNewTravelForm ? '✖️ 取消新增' : '➕ 新增旅遊紀錄'}</span>
@@ -2748,11 +2891,12 @@
                                     <div class="min-w-0">
                                         <label class="block text-xs font-bold text-cream-text mb-1">出發日期 *</label>
                                         <input type="date" id="travel-start-input" required value="${todayStr}"
+                                               onchange="const endEl=document.getElementById('travel-end-input'); if(endEl && endEl.value < this.value) endEl.value = this.value;"
                                                class="block w-full min-w-0 max-w-full box-border px-2.5 py-2 text-xs rounded-xl border-2 border-cream-border focus:border-cream-primary focus:outline-none">
                                     </div>
                                     <div class="min-w-0">
                                         <label class="block text-xs font-bold text-cream-text mb-1">回程日期</label>
-                                        <input type="date" id="travel-end-input" value="${todayStr}"
+                                        <input type="date" id="travel-end-input" value="${todayStr}" min="${todayStr}"
                                                class="block w-full min-w-0 max-w-full box-border px-2.5 py-2 text-xs rounded-xl border-2 border-cream-border focus:border-cream-primary focus:outline-none">
                                     </div>
                                 </div>
@@ -2780,7 +2924,6 @@
                         ` : ''}
                     </div>
 
-                    <!-- 歷史旅遊紀錄列表 -->
                     <div class="space-y-2.5">
                         <h3 class="text-xs sm:text-sm font-extrabold text-cream-text px-1">📚 歷史旅遊紀錄</h3>
                         ${historyHtml}
@@ -2802,19 +2945,11 @@
                 travel.photos = [];
             }
 
-            let total = 0, checked = 0;
-            travel.checklist.forEach(cat => {
-                cat.items.forEach(it => {
-                    total++;
-                    if (it.checked) checked++;
-                });
-            });
-            const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+            const { total, checked, pct } = getTravelProgress(travel);
             const dateText = travel.endDate && travel.endDate !== travel.startDate
                 ? `${escapeHtml(travel.startDate)} ～ ${escapeHtml(travel.endDate)}`
                 : escapeHtml(travel.startDate || '未設定日期');
 
-            // 旅程紀念照片 HTML（最多 3 張）
             const photos = travel.photos.slice(0, 3);
             const photoSlotsHtml = photos.map((pUrl, idx) => {
                 const displayUrl = normalizeCloudImageUrl(pUrl);
@@ -2897,7 +3032,6 @@
 
             return `
                 <div class="space-y-4 max-w-2xl mx-auto">
-                    <!-- 頂部導覽 -->
                     <div class="flex items-center justify-between">
                         <button onclick="router.navigate('travel')" class="cream-btn bg-white px-3 py-1.5 text-xs font-bold">
                             ⬅️ 返回列表
@@ -2908,7 +3042,6 @@
                         </button>
                     </div>
 
-                    <!-- 旅程資訊與進度卡片 -->
                     <div class="bg-white cream-box p-4 space-y-3">
                         ${isEditingTravelMeta ? `
                             <form onsubmit="handleUpdateTravelMeta(event)" class="space-y-2.5">
@@ -2921,6 +3054,7 @@
                                     <div class="min-w-0">
                                         <label class="block text-xs font-bold mb-1">出發日期</label>
                                         <input type="date" id="edit-travel-start" required value="${escapeHtml(travel.startDate || '')}"
+                                               onchange="const endEl=document.getElementById('edit-travel-end'); if(endEl && endEl.value < this.value) endEl.value = this.value;"
                                                class="block w-full min-w-0 max-w-full box-border px-2.5 py-1.5 text-xs rounded-xl border-2 border-cream-border">
                                     </div>
                                     <div class="min-w-0">
@@ -2963,7 +3097,6 @@
                         </div>
                     </div>
 
-                    <!-- 旅程紀念照片（最多 3 張） -->
                     <div class="bg-white cream-box p-4 space-y-2.5">
                         <div class="flex items-center justify-between">
                             <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">📸 旅程紀念照片</h3>
@@ -2978,7 +3111,6 @@
                         ${addPhotoUrlBarHtml}
                     </div>
 
-                    <!-- 分類準備清單 -->
                     <div class="space-y-3">
                         ${categoriesHtml}
                     </div>
@@ -3020,8 +3152,11 @@
                             showToast('⚠️ 雲端上傳失敗，已暫存於本機相簿');
                         }
                     }
-                    travel.photos.push(normalizeCloudImageUrl(finalUrl));
-                    uploadedCount++;
+                    const safePhoto = normalizeCloudImageUrl(finalUrl);
+                    if (safePhoto) {
+                        travel.photos.push(safePhoto);
+                        uploadedCount++;
+                    }
                 } catch (err) {
                     console.error('照片處理失敗：', err);
                 }
@@ -3047,9 +3182,13 @@
             }
 
             const rawUrl = input.value.trim();
-            if (!rawUrl) return;
+            const safeUrl = normalizeCloudImageUrl(rawUrl);
+            if (!safeUrl) {
+                showToast('⚠️ 請輸入有效的圖片網址（http:// 或 https://）');
+                return;
+            }
 
-            travel.photos.push(normalizeCloudImageUrl(rawUrl));
+            travel.photos.push(safeUrl);
             saveState();
             showToast('📸 已新增旅程照片！');
             renderView('travel_detail');
@@ -3091,11 +3230,15 @@
             event.preventDefault();
             const name = document.getElementById('travel-name-input').value.trim();
             const startDate = document.getElementById('travel-start-input').value;
-            const endDate = document.getElementById('travel-end-input').value || startDate;
+            let endDate = document.getElementById('travel-end-input').value || startDate;
             const typeEl = document.querySelector('input[name="travel-type"]:checked');
             const type = typeEl ? typeEl.value : 'domestic';
 
             if (!name) return;
+            if (endDate < startDate) {
+                endDate = startDate;
+                showToast('ℹ️ 回程日期早於出發日期，已自動調整為同一天');
+            }
 
             const checklist = TRAVEL_CHECKLIST_TEMPLATES
                 .filter(tpl => tpl.scope === 'all' || (type === 'international' && tpl.scope === 'international'))
@@ -3141,8 +3284,13 @@
 
             const newName = document.getElementById('edit-travel-name').value.trim();
             const newStart = document.getElementById('edit-travel-start').value;
-            const newEnd = document.getElementById('edit-travel-end').value || newStart;
+            let newEnd = document.getElementById('edit-travel-end').value || newStart;
             const newType = document.getElementById('edit-travel-type').value;
+
+            if (newEnd < newStart) {
+                newEnd = newStart;
+                showToast('ℹ️ 回程日期早於出發日期，已自動調整為同一天');
+            }
 
             if (newName) travel.name = newName;
             travel.startDate = newStart;
@@ -3193,13 +3341,52 @@
             renderView('travel_detail');
         }
 
-        function deleteTravelRecord(travelId) {
-            if (!confirm('確定要刪除這筆旅遊紀錄與準備清單嗎？')) return;
+        function confirmDeleteTravelRecord(travelId) {
+            const target = state.travels.find(t => t.id === travelId);
+            if (!target) return;
+            openConfirmDialog({
+                icon: '🧳',
+                title: `確定要刪除「${target.name}」嗎？`,
+                bodyHtml: `刪除後這趟旅程的行前準備清單與紀念照片將一併移除，此操作無法復原喔！`,
+                confirmLabel: '確定刪除',
+                onConfirmCode: `executeDeleteTravelRecord('${escapeHtml(target.id)}')`
+            });
+        }
+
+        function executeDeleteTravelRecord(travelId) {
             state.travels = state.travels.filter(t => t.id !== travelId);
             saveState();
+            closeModal();
             showToast('🗑️ 已刪除旅遊紀錄');
             renderView('travel');
         }
+
+        // ==================== 14. 初始化執行 ====================
+        window.addEventListener('DOMContentLoaded', () => {
+            updateHeaderInfo();
+            checkAchievements();
+            router.navigate('home');
+            syncAllCloudData(false);
+        });
     </script>
 </body>
 </html>
+'''
+
+output_path = '/mnt/data/hngui_farm.html'
+with open(output_path, 'w', encoding='utf-8') as f:
+    f.write(html_content.strip() + '\n')
+
+import re
+js_match = re.search(r'<script>\s*(// ==================== 1\..*?)</script>', html_content, re.DOTALL)
+js_code = js_match.group(1)
+func_defs = re.findall(r'(?:async\s+)?function\s+([a-zA-Z0-9_]+)\s*\(', js_code)
+unused_funcs = []
+for fn in func_defs:
+    # count occurrences across entire html (including inline onclick/onsubmit/onchange)
+    count = len(re.findall(r'\b' + re.escape(fn) + r'\b', html_content))
+    if count <= 1:
+        unused_funcs.append(fn)
+
+print(f"Saved to {output_path}, total lines: {len(html_content.strip().splitlines())}")
+print(f"Total JS functions: {len(func_defs)}, Unused functions: {unused_funcs}")
