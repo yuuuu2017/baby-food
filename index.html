@@ -1096,12 +1096,12 @@
                 : `<div class="w-12 h-12 rounded-full border-2 border-cream-text bg-cream-yellow flex items-center justify-center text-2xl shadow-md">👶</div>`;
 
             const orbitZones = [
-                { id: 'farm', action: "moveCharacterAndGo(this, 'section', {category: 'farm'})", icon: '🌾', title: '農田區', sub: '五穀/蔬菜', angleDeg: 115 },
-                { id: 'cottage', action: "moveCharacterAndGo(this, 'cottage', {})", icon: '🏠', title: '農舍', sub: `成就 ${state.achievements.length}/${ACHIEVEMENTS_LIST.length}`, angleDeg: 55 },
-                { id: 'greenhouse', action: "moveCharacterAndGo(this, 'section', {category: 'greenhouse'})", icon: '🪵', title: '溫室', sub: '菇類', angleDeg: 355 },
-                { id: 'pasture', action: "moveCharacterAndGo(this, 'section', {category: 'pasture'})", icon: '🥩', title: '牧場區', sub: '蛋白質/肉類', angleDeg: 295 },
-                { id: 'fish', action: "moveCharacterAndGo(this, 'section', {category: 'fish'})", icon: '🐟', title: '魚池', sub: '魚類/海鮮', angleDeg: 235 },
-                { id: 'orchard', action: "moveCharacterAndGo(this, 'section', {category: 'orchard'})", icon: '🌳', title: '果樹區', sub: '水果', angleDeg: 175 }
+                { id: 'farm', action: "moveCharacterAndGo(this, 'section', {category: 'farm'})", icon: '🌾', title: '農田區', sub: '五穀/蔬菜', angleDeg: 125 },
+                { id: 'cottage', action: "moveCharacterAndGo(this, 'cottage', {})", icon: '🏠', title: '農舍', sub: `成就 ${state.achievements.length}/${ACHIEVEMENTS_LIST.length}`, angleDeg: 65 },
+                { id: 'greenhouse', action: "moveCharacterAndGo(this, 'section', {category: 'greenhouse'})", icon: '🪵', title: '溫室', sub: '菇類', angleDeg: 365 },
+                { id: 'pasture', action: "moveCharacterAndGo(this, 'section', {category: 'pasture'})", icon: '🥩', title: '牧場區', sub: '蛋白質/肉類', angleDeg: 305 },
+                { id: 'fish', action: "moveCharacterAndGo(this, 'section', {category: 'fish'})", icon: '🐟', title: '魚池', sub: '魚類/海鮮', angleDeg: 245 },
+                { id: 'orchard', action: "moveCharacterAndGo(this, 'section', {category: 'orchard'})", icon: '🌳', title: '果樹區', sub: '水果', angleDeg: 185 }
             ];
 
             const orbitRadiusPct = 36;
@@ -1334,6 +1334,7 @@
 
             const triedCount = item.history.length;
             const isUnlocked = triedCount >= 3;
+            const isCustom = state.customIngredients.some(i => i.id === item.id);
             const isPlantZone = ['farm', 'orchard', 'greenhouse'].includes(item.category);
 
             const submitBtnLabel = isPlantZone
@@ -1386,6 +1387,18 @@
                 </div>
 
                 <div class="space-y-4 text-sm">
+                    ${isCustom ? `
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <button type="button" onclick="openEditCustomIngredientModal('${escapeHtml(item.id)}')"
+                                class="cream-btn bg-amber-50 hover:bg-amber-100 text-cream-text py-2 text-xs font-extrabold flex items-center justify-center space-x-1">
+                                <span>✏️</span><span>編輯自訂食材</span>
+                            </button>
+                            <button type="button" onclick="confirmDeleteCustomIngredient('${escapeHtml(item.id)}')"
+                                class="cream-btn bg-red-50 hover:bg-red-100 text-red-700 py-2 text-xs font-extrabold flex items-center justify-center space-x-1">
+                                <span>🗑️</span><span>刪除自訂食材</span>
+                            </button>
+                        </div>
+                    ` : ''}
                     <div class="bg-white p-3 cream-box">
                         <h4 class="font-extrabold text-cream-primary flex items-center space-x-1 mb-1 text-xs">
                             <span>🔪</span><span>準備方式與切法建議</span>
@@ -1923,7 +1936,7 @@
                         <label class="block text-xs font-bold mb-1">準備方式與備註</label>
                         <textarea id="cust-prep" rows="2" placeholder="簡單寫下烹調方式..." class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white"></textarea>
                     </div>
-                    <button type="submit" class="w-full bg-cream-primary text-white font-extrabold py-2.5 cream-btn text-sm">
+                    <button type="submit" id="cust-submit-btn" class="w-full bg-cream-primary text-white font-extrabold py-2.5 cream-btn text-sm">
                         ✨ 建立自訂食材
                     </button>
                 </form>
@@ -1960,6 +1973,14 @@
             const enInput = document.getElementById('cust-name-en');
             const hintBox = document.getElementById('cust-dup-hint');
             if (!nameInput || !hintBox) return;
+            // 只要使用者重新修改名稱，就把送出按鈕恢復成初始狀態
+            const submitBtn = document.getElementById('cust-submit-btn');
+            if (submitBtn && submitBtn.dataset.confirmedKey) {
+                delete submitBtn.dataset.confirmedKey;
+                submitBtn.textContent = '✨ 建立自訂食材';
+                submitBtn.classList.remove('bg-amber-600');
+                submitBtn.classList.add('bg-cream-primary');
+            }
 
             const coreZh = stripFoodSuffix(nameInput.value);
             const normEn = normalizeFoodName(enInput ? enInput.value : '');
@@ -2018,10 +2039,20 @@
                 return sameZh || sameEn;
             });
 
-            if (duplicateItem) {
-                showToast(`⚠️「${duplicateItem.name}」已經在${CAT_LABEL_MAP[duplicateItem.category] || '圖鑑'}中囉！請直接點擊下方按鈕記錄`);
-                checkCustomIngredientDuplicate(); // 確保提示框打開，方便他一鍵跳轉
-                return; // 提早結束函式，不往下執行新增
+            const submitBtn = document.getElementById('cust-submit-btn');
+            const confirmKey = `${name}|${nameEn}`;
+
+            // 若有相似食材，且「尚未做過二次確認」，就先提醒並等待再點一次
+            if (duplicateItem && (!submitBtn || submitBtn.dataset.confirmedKey !== confirmKey)) {
+                showToast(`⚠️ 圖鑑已有類似食材「${duplicateItem.name}」，若確定要新增請再點一次按鈕`);
+                checkCustomIngredientDuplicate();
+                if (submitBtn) {
+                    submitBtn.dataset.confirmedKey = confirmKey;
+                    submitBtn.textContent = `⚠️ 已有「${duplicateItem.name}」，再點一次確定新增`;
+                    submitBtn.classList.remove('bg-cream-primary');
+                    submitBtn.classList.add('bg-amber-600');
+                }
+                return;
             }
 
             const id = 'custom_' + Date.now();
@@ -2033,6 +2064,93 @@
             closeModal();
             showToast(`✨ 已新增自訂食材「${name}」！`);
             router.navigate('section', { category });
+        }
+
+        // 開啟自訂食材編輯彈窗（帶入原本的資料）
+        function openEditCustomIngredientModal(customId) {
+            const target = state.customIngredients.find(i => i.id === customId);
+            if (!target) return; // 官方圖鑑食材不在 customIngredients 內，自動擋下
+
+            const modalContent = document.getElementById('modal-content');
+            modalContent.innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-base sm:text-lg font-extrabold">✏️ 編輯自訂食材</h3>
+                    <button onclick="openIngredientDetail('${escapeHtml(target.id)}')" class="cream-btn px-3 py-1 bg-white text-xs font-bold">⬅️ 返回</button>
+                </div>
+                <form onsubmit="handleEditCustomIngredientSubmit(event, '${escapeHtml(target.id)}')" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold mb-1">食材名稱</label>
+                        <input type="text" id="edit-cust-name" required value="${escapeHtml(target.name)}" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1">英文名稱 (選填)</label>
+                        <input type="text" id="edit-cust-name-en" value="${escapeHtml(target.nameEn || '')}" placeholder="例如：Dragon Fruit" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold mb-1">歸屬農場分區</label>
+                            <select id="edit-cust-cat" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
+                                <option value="farm" ${target.category === 'farm' ? 'selected' : ''}>🌾 農田區（五穀/蔬菜）</option>
+                                <option value="orchard" ${target.category === 'orchard' ? 'selected' : ''}>🍎 果樹區（水果）</option>
+                                <option value="fish" ${target.category === 'fish' ? 'selected' : ''}>🐟 魚池（魚類/海鮮）</option>
+                                <option value="pasture" ${target.category === 'pasture' ? 'selected' : ''}>🥩 牧場區（蛋白質/肉類）</option>
+                                <option value="greenhouse" ${target.category === 'greenhouse' ? 'selected' : ''}>🍄 溫室（菇類）</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold mb-1">食材圖片網址 (imageUrl)</label>
+                            <input type="url" id="edit-cust-img-url" value="${escapeHtml(target.imageUrl || '')}" placeholder="貼上雲端圖片連結" class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1">準備方式與備註</label>
+                        <textarea id="edit-cust-prep" rows="2" placeholder="簡單寫下烹調方式..." class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white">${escapeHtml(target.prep || '')}</textarea>
+                    </div>
+                    <p class="text-[11px] text-cream-muted font-bold">💡 修改資訊不會影響這項食材原本累積的試吃紀錄 (${target.history.length} 筆)。</p>
+                    <button type="submit" class="w-full bg-cream-primary text-white font-extrabold py-2.5 cream-btn text-sm">
+                        💾 儲存修改
+                    </button>
+                </form>
+            `;
+            document.getElementById('modal-container').classList.remove('hidden');
+        }
+
+        // 儲存自訂食材修改（含同名防呆，且保留原有試吃歷史）
+        function handleEditCustomIngredientSubmit(event, customId) {
+            event.preventDefault();
+            const target = state.customIngredients.find(i => i.id === customId);
+            if (!target) return;
+
+            const name = document.getElementById('edit-cust-name').value.trim();
+            const nameEn = document.getElementById('edit-cust-name-en').value.trim();
+            const category = document.getElementById('edit-cust-cat').value;
+            const imageUrl = document.getElementById('edit-cust-img-url').value.trim();
+            const prep = document.getElementById('edit-cust-prep').value.trim() || '爸爸媽媽愛心自製副食品！';
+
+            if (!name) return;
+
+            // 同名防呆：比對其他食材，但記得排除自己 (ing.id === target.id)
+            const duplicateItem = getAllIngredients().find(ing => {
+                if (ing.id === target.id) return false;
+                const sameZh = stripFoodSuffix(ing.name) === stripFoodSuffix(name);
+                const sameEn = nameEn && ing.nameEn && normalizeFoodName(ing.nameEn) === normalizeFoodName(nameEn);
+                return sameZh || sameEn;
+            });
+
+            if (duplicateItem) {
+                showToast(`⚠️「${duplicateItem.name}」已經在${CAT_LABEL_MAP[duplicateItem.category] || '圖鑑'}中囉，建議換個名稱！`);
+            }
+
+            target.name = name;
+            target.nameEn = nameEn;
+            target.category = category;
+            target.imageUrl = imageUrl;
+            target.prep = prep;
+
+            saveState();
+            closeModal();
+            showToast(`✏️ 已更新自訂食材「${name}」！`);
+            renderView(router.currentView, router.currentParams || {});
         }
 
         // ==================== 8. 農場主人設定頁面 ====================
@@ -2228,22 +2346,12 @@
                     : item.seedEmoji;
                 let bgClass = isUnlocked ? "bg-emerald-50/70 border-emerald-500" : "bg-white border-cream-text";
 
-                const deleteBtnHtml = item.isCustom ? `
-                    <button type="button"
-                            onclick="event.stopPropagation(); confirmDeleteCustomIngredient('${item.id}')"
-                            title="刪除此自訂食材"
-                            class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-100 hover:bg-red-500 text-red-600 hover:text-white border border-red-300 flex items-center justify-center text-xs font-bold transition shadow-sm">
-                        🗑️
-                    </button>
-                ` : '';
-
                 return `
-                    <div onclick="openIngredientDetail('${item.id}')" class="relative ${bgClass} cream-box p-3 cursor-pointer flex items-center space-x-3 hover:scale-[1.01] transition">
-                        ${deleteBtnHtml}
+                    <div onclick="openIngredientDetail('${item.id}')" class="${bgClass} cream-box p-3 cursor-pointer flex items-center space-x-3 hover:scale-[1.01] transition">
                         <div class="text-3xl p-1.5 bg-white rounded-2xl border-2 border-cream-text shadow-sm flex items-center justify-center w-12 h-12 shrink-0 overflow-hidden">
                             ${displayVisual}
                         </div>
-                        <div class="overflow-hidden ${item.isCustom ? 'pr-5' : ''}">
+                        <div class="overflow-hidden flex-1 min-w-0">
                             <div class="flex items-center space-x-1">
                                 <h4 class="font-extrabold text-sm truncate text-cream-text">${escapeHtml(item.name)}</h4>
                                 ${item.isCustom ? '<span class="shrink-0 text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 rounded-full font-extrabold">自訂</span>' : ''}
@@ -2317,7 +2425,7 @@
             saveState();
             closeModal();
             showToast(`🗑️ 已刪除自訂食材「${removedName}」`);
-            renderView('encyclopedia');
+            renderView(router.currentView, router.currentParams || {});
         }
 
         // ==================== 10. 週曆 & 全部歷史紀錄管理 ====================
