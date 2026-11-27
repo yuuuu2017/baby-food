@@ -2387,11 +2387,112 @@
         // ==================== 9. 食材圖鑑 (雙列進階篩選 + 自訂食材安全刪除) ====================
         let encFilterCat = 'all';
         let encFilterStatus = 'all';
+        let encFilterSearch = '';
 
         function setEncFilter(type, value) {
             if (type === 'cat') encFilterCat = value;
             if (type === 'status') encFilterStatus = value;
             renderView('encyclopedia');
+        }
+
+        // 打字時「只重繪卡片區」，不重繪搜尋框，避免中文注音組字中斷
+        function setEncSearch(val) {
+            encFilterSearch = val;
+            const gridEl = document.getElementById('enc-grid-container');
+            if (gridEl) {
+                gridEl.innerHTML = renderEncyclopediaGrid();
+            }
+            const clearBtn = document.getElementById('enc-search-clear');
+            if (clearBtn) {
+                clearBtn.classList.toggle('hidden', !val);
+            }
+        }
+
+        // 一鍵清空搜尋框並重新聚焦
+        function clearEncSearch() {
+            encFilterSearch = '';
+            const inputEl = document.getElementById('enc-search-input');
+            if (inputEl) {
+                inputEl.value = '';
+                inputEl.focus();
+            }
+            setEncSearch('');
+        }
+
+        // 專門負責「篩選＋繪製圖鑑卡片區」（給初次載入與即時搜尋共用）
+        function renderEncyclopediaGrid() {
+            const allItems = [
+                ...Object.values(state.ingredients).map(i => ({ ...i, isCustom: false })),
+                ...state.customIngredients.map(i => ({ ...i, isCustom: true }))
+            ];
+
+            const keyword = encFilterSearch.trim().toLowerCase();
+
+            const filtered = allItems.filter(item => {
+                // 1. 農場分區 / 自訂篩選
+                if (encFilterCat === 'custom') {
+                    if (!item.isCustom) return false;
+                } else if (encFilterCat !== 'all' && item.category !== encFilterCat) {
+                    return false;
+                }
+
+                // 2. 狀態與過敏篩選
+                const triedCount = item.history.length;
+                const latestReaction = triedCount > 0 ? item.history[item.history.length - 1].reaction : null;
+
+                if (encFilterStatus === 'tried' && triedCount === 0) return false;
+                if (encFilterStatus === 'untried' && triedCount > 0) return false;
+                if (encFilterStatus === 'allergic' && (!latestReaction || !['mild', 'moderate', 'severe'].includes(latestReaction))) return false;
+                if (encFilterStatus === 'no_allergy' && (!latestReaction || latestReaction !== 'none')) return false;
+
+                // 3. 關鍵字搜尋（同時比對中文與英文名稱，不分大小寫）
+                if (keyword) {
+                    const nameZh = String(item.name || '').toLowerCase();
+                    const nameEn = String(item.nameEn || '').toLowerCase();
+                    if (!nameZh.includes(keyword) && !nameEn.includes(keyword)) return false;
+                }
+
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                return `<div class="col-span-full text-center py-8 text-xs text-cream-muted font-bold">沒有符合此篩選條件的食材喔 🌱</div>`;
+            }
+
+            return filtered.map(item => {
+                const triedCount = item.history.length;
+                const isUnlocked = triedCount >= 3;
+                const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
+                const displayVisual = isUnlocked
+                    ? (normalizedImgUrl
+                        ? `<img src="${escapeHtml(normalizedImgUrl)}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-2xl">🎴</span>`
+                        : `<span class="text-2xl">🎴</span>`)
+                    : item.seedEmoji;
+
+                const latestPref = (typeof getLatestPreference === 'function') ? getLatestPreference(item.history) : '';
+                const prefTag = (latestPref && typeof PREF_META !== 'undefined' && PREF_META[latestPref])
+                    ? ` ・ ${PREF_META[latestPref].emoji}${PREF_META[latestPref].label}`
+                    : '';
+
+                const cardClass = isUnlocked
+                    ? "normal-box bg-emerald-50/70 border-emerald-500 hover:-translate-y-0.5"
+                    : "cream-dashed-box bg-white";
+
+                return `
+                    <div onclick="openIngredientDetail('${item.id}')" class="${cardClass} p-3 cursor-pointer flex items-center space-x-3 transition">
+                        <div class="text-3xl flex items-center justify-center w-12 h-12 shrink-0 overflow-hidden">
+                            ${displayVisual}
+                        </div>
+                        <div class="overflow-hidden flex-1 min-w-0">
+                            <div class="flex items-center space-x-1">
+                                <h4 class="font-extrabold text-sm truncate text-cream-text">${escapeHtml(item.name)}</h4>
+                                ${item.isCustom ? '<span class="shrink-0 text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 rounded-full font-extrabold">自訂</span>' : ''}
+                            </div>
+                            <p class="text-[10px] font-bold text-cream-muted">${isUnlocked ? '✨ 已解鎖' : `🥄 試吃中 (${triedCount}/3)`}${prefTag}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function renderEncyclopediaView() {
@@ -2413,78 +2514,34 @@
                 { id: 'no_allergy', label: '無過敏' }
             ];
 
-            let allItems = [
-                ...Object.values(state.ingredients).map(i => ({ ...i, isCustom: false })),
-                ...state.customIngredients.map(i => ({ ...i, isCustom: true }))
-            ];
-
-            let filtered = allItems.filter(item => {
-                if (encFilterCat === 'custom') {
-                    if (!item.isCustom) return false;
-                } else if (encFilterCat !== 'all' && item.category !== encFilterCat) {
-                    return false;
-                }
-
-                const triedCount = item.history.length;
-                const latestReaction = triedCount > 0 ? item.history[item.history.length - 1].reaction : null;
-
-                if (encFilterStatus === 'tried' && triedCount === 0) return false;
-                if (encFilterStatus === 'untried' && triedCount > 0) return false;
-                if (encFilterStatus === 'allergic' && (!latestReaction || !['mild', 'moderate', 'severe'].includes(latestReaction))) return false;
-                if (encFilterStatus === 'no_allergy' && (!latestReaction || latestReaction !== 'none')) return false;
-
-                return true;
-            });
-
-            let catButtonsHtml = categories.map(c => {
+            const catButtonsHtml = categories.map(c => {
                 const isActive = encFilterCat === c.id;
                 const btnClass = isActive ? 'bg-cream-primary text-white' : 'bg-white text-cream-text hover:bg-cream-bg';
                 return `<button onclick="setEncFilter('cat', '${c.id}')" class="px-3 py-1.5 rounded-full text-xs font-bold border-2 border-cream-text shadow-sm ${btnClass} transition">${c.label}</button>`;
             }).join('');
 
-            let statusButtonsHtml = statuses.map(s => {
+            const statusButtonsHtml = statuses.map(s => {
                 const isActive = encFilterStatus === s.id;
                 const btnClass = isActive ? 'bg-cream-primary text-white' : 'bg-white text-cream-text hover:bg-cream-bg';
                 return `<button onclick="setEncFilter('status', '${s.id}')" class="px-3 py-1.5 rounded-full text-xs font-bold border-2 border-cream-text shadow-sm ${btnClass} transition">${s.label}</button>`;
-            }).join('');
-
-            let itemsHtml = filtered.map(item => {
-                const triedCount = item.history.length;
-                const isUnlocked = triedCount >= 3;
-                const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
-                let displayVisual = isUnlocked
-                    ? (normalizedImgUrl
-                        ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-2xl">🎴</span>`
-                        : `<span class="text-2xl">🎴</span>`)
-                    : item.seedEmoji;
-                
-                const latestPref = getLatestPreference(item.history);
-                const prefTag = latestPref ? ` ・ ${PREF_META[latestPref].emoji}${PREF_META[latestPref].label}` : '';
-
-                const cardClass = isUnlocked
-                    ? "normal-box bg-emerald-50/70 border-emerald-500 hover:-translate-y-0.5"
-                    : "cream-dashed-box bg-white";
-
-                return `
-                    <div onclick="openIngredientDetail('${item.id}')" class="${cardClass} p-3 cursor-pointer flex items-center space-x-3 transition">
-                        <div class="text-3xl flex items-center justify-center w-12 h-12 shrink-0 overflow-hidden">
-                            ${displayVisual}
-                        </div>
-                        <div class="overflow-hidden flex-1 min-w-0">
-                            <div class="flex items-center space-x-1">
-                                <h4 class="font-extrabold text-sm truncate text-cream-text">${escapeHtml(item.name)}</h4>
-                                ${item.isCustom ? '<span class="shrink-0 text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 rounded-full font-extrabold">自訂</span>' : ''}
-                            </div>
-                            <p class="text-[10px] font-bold text-cream-muted">${isUnlocked ? '✨ 已解鎖' : `🌱 試吃中 (${triedCount}/3)`}${prefTag}</p>
-                        </div>
-                    </div>
-                `;
             }).join('');
 
             return `
                 <div class="space-y-4">
                     <div class="flex items-center justify-center">
                         <h2 class="text-base sm:text-lg font-extrabold">📖 農場食材總圖鑑</h2>
+                    </div>
+
+                    <!-- 🔍 關鍵字搜尋框 -->
+                    <div class="relative">
+                        <input type="text" id="enc-search-input" value="${escapeHtml(encFilterSearch)}"
+                            oninput="setEncSearch(this.value)"
+                            placeholder="🔍 搜尋食材中文或英文名稱（如：酪梨、apple）..."
+                            class="w-full pl-4 pr-10 py-2.5 bg-white cream-box text-xs sm:text-sm font-bold text-cream-text focus:outline-none">
+                        <button type="button" id="enc-search-clear" onclick="clearEncSearch()" title="清除搜尋"
+                            class="${encFilterSearch ? '' : 'hidden'} absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-cream-secondary/70 hover:bg-cream-secondary text-cream-text text-xs font-extrabold flex items-center justify-center">
+                            ✕
+                        </button>
                     </div>
 
                     <div class="bg-white cream-box p-3 space-y-2">
@@ -2501,8 +2558,9 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        ${filtered.length > 0 ? itemsHtml : `<div class="col-span-full text-center py-8 text-xs text-cream-muted font-bold">沒有符合此篩選條件的食材喔 🌱</div>`}
+                    <!-- 獨立加上 id="enc-grid-container"，讓搜尋時只更新這一塊 -->
+                    <div id="enc-grid-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        ${renderEncyclopediaGrid()}
                     </div>
                 </div>
             `;
@@ -2668,14 +2726,28 @@
         let historyManagerSearch = '';
         let editingHistoryTarget = null;
 
+        function scrollToEditingHistoryForm() {
+            // 等瀏覽器完成顯示與排版後，再平滑捲動把編輯表單對準畫面中央
+            requestAnimationFrame(() => {
+                const formEl = document.getElementById('editing-history-form');
+                if (formEl) {
+                    formEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        }
+
         function openHistoryManagerModal(targetIngId = null, targetIdx = null) {
             if (targetIngId !== null && targetIdx !== null) {
+                historyManagerSearch = ''; // 清空上次殘留的搜尋字，確保點選的紀錄一定看得到
                 editingHistoryTarget = { ingredientId: targetIngId, historyIndex: targetIdx };
             } else {
                 editingHistoryTarget = null;
             }
             renderHistoryManagerContent();
             document.getElementById('modal-container').classList.remove('hidden');
+            if (editingHistoryTarget) {
+                scrollToEditingHistoryForm();
+            }
         }
 
         function setHistorySearch(val) {
@@ -2686,6 +2758,7 @@
         function startEditHistoryRecord(ingredientId, historyIndex) {
             editingHistoryTarget = { ingredientId, historyIndex };
             renderHistoryManagerContent();
+            scrollToEditingHistoryForm();
         }
 
         function cancelEditHistoryRecord() {
@@ -2782,7 +2855,7 @@
 
                             if (isEditing) {
                                 return `
-                                    <form onsubmit="saveEditedHistoryRecord(event, '${r.ingredientId}', ${r.historyIndex})"
+                                    <form id="editing-history-form" onsubmit="saveEditedHistoryRecord(event, '${r.ingredientId}', ${r.historyIndex})"
                                         class="bg-cream-yellow/35 border-2 border-cream-primary rounded-2xl p-3 space-y-2.5">
                                         <div class="flex justify-between items-center">
                                             <span class="font-extrabold text-sm text-cream-text">✏️ 編輯：${escapeHtml(r.ingredientName)} (第 ${r.historyIndex + 1} 次)</span>
