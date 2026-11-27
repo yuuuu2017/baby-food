@@ -273,7 +273,8 @@
                 const safeTravels = Array.isArray(parsed.travels)
                     ? parsed.travels.map(t => ({
                         ...t,
-                        photos: Array.isArray(t.photos) ? t.photos.slice(0, 3) : []
+                        photos: Array.isArray(t.photos) ? t.photos.slice(0, MAX_TRAVEL_PHOTOS) : [],
+                        notes: typeof t.notes === 'string' ? t.notes : ''
                     }))
                     : [];
 
@@ -365,6 +366,9 @@
         let activeTravelId = null;
         let showNewTravelForm = false;
         let isEditingTravelMeta = false;
+        const MAX_TRAVEL_PHOTOS = 6;
+        const MAX_TRAVEL_NOTE_LENGTH = 800;
+        let isEditingTravelNotes = false;
 
         let state = loadInitialState();
         let isCloudSyncing = false;
@@ -410,7 +414,8 @@
                 ...t,
                 photos: (Array.isArray(t.photos) ? t.photos : [])
                     .filter(u => !String(u).startsWith('data:'))
-                    .slice(0, 3)
+                    .slice(0, MAX_TRAVEL_PHOTOS),
+                notes: typeof t.notes === 'string' ? t.notes.slice(0, MAX_TRAVEL_NOTE_LENGTH) : ''
             }));
 
             const safeAvatar = String(state.owner.avatarUrl || '');
@@ -497,7 +502,8 @@
                         : [];
                     return {
                         ...ct,
-                        photos: [...remotePhotos, ...localBase64Photos].slice(0, 3)
+                        photos: [...remotePhotos, ...localBase64Photos].slice(0, MAX_TRAVEL_PHOTOS),
+                        notes: typeof ct.notes === 'string' ? ct.notes : ''
                     };
                 });
             }
@@ -2869,15 +2875,29 @@
                         ? `${escapeHtml(t.startDate)} ～ ${escapeHtml(t.endDate)}`
                         : escapeHtml(t.startDate || '未設定日期');
 
-                    const photos = Array.isArray(t.photos) ? t.photos.slice(0, 3) : [];
-                    const photoThumbsHtml = photos.length > 0 ? `
+                    const allPhotos = Array.isArray(t.photos) ? t.photos.slice(0, MAX_TRAVEL_PHOTOS) : [];
+                    const previewPhotos = allPhotos.slice(0, 3);
+                    const extraPhotoCount = Math.max(0, allPhotos.length - 3);
+                    const photoThumbsHtml = previewPhotos.length > 0 ? `
                         <div class="flex items-center gap-2 pt-0.5">
-                            ${photos.map((pUrl, pIdx) => `
+                            ${previewPhotos.map((pUrl, pIdx) => `
                                 <img src="${escapeHtml(normalizeCloudImageUrl(pUrl))}" alt="旅程照片 ${pIdx + 1}"
                                      onerror="this.style.display='none';"
                                      class="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-xl border border-cream-text bg-cream-secondary/20">
                             `).join('')}
+                            ${extraPhotoCount > 0 ? `
+                                <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 border-dashed border-cream-primary bg-cream-yellow/40 flex flex-col items-center justify-center text-cream-primary font-extrabold shrink-0">
+                                    <span class="text-sm leading-none">+${extraPhotoCount}</span>
+                                    <span class="text-[9px] mt-0.5">更多照片</span>
+                                </div>
+                            ` : ''}
                         </div>
+                    ` : '';
+
+                    const notePreviewHtml = (t.notes && t.notes.trim()) ? `
+                        <p class="text-[11px] text-cream-text/80 bg-cream-bg px-2.5 py-1.5 rounded-xl border border-cream-border/70 truncate">
+                            📝 ${escapeHtml(t.notes.trim().replace(/\s+/g, ' '))}
+                        </p>
                     ` : '';
 
                     return `
@@ -2895,6 +2915,7 @@
                                         title="刪除旅遊紀錄">🗑️</button>
                             </div>
                             ${photoThumbsHtml}
+                            ${notePreviewHtml}
                             <div class="space-y-1">
                                 <div class="flex justify-between text-[11px] font-bold text-cream-muted">
                                     <span>🎒 打包進度</span>
@@ -3016,8 +3037,7 @@
                 ? `${escapeHtml(travel.startDate)} ～ ${escapeHtml(travel.endDate)}`
                 : escapeHtml(travel.startDate || '未設定日期');
 
-            // 旅程紀念照片 HTML（最多 3 張）
-            const photos = travel.photos.slice(0, 3);
+            const photos = travel.photos.slice(0, MAX_TRAVEL_PHOTOS);
             const photoSlotsHtml = photos.map((pUrl, idx) => {
                 const displayUrl = normalizeCloudImageUrl(pUrl);
                 return `
@@ -3035,16 +3055,16 @@
                 `;
             }).join('');
 
-            const addPhotoSlotHtml = photos.length < 3 ? `
+            photos.length < MAX_TRAVEL_PHOTOS ? `
                 <label class="aspect-square rounded-xl border-2 border-dashed border-cream-primary bg-cream-bg hover:bg-cream-secondary/30 flex flex-col items-center justify-center cursor-pointer transition p-2 text-center">
                     <span class="text-2xl">📸</span>
                     <span class="text-[11px] font-extrabold text-cream-primary mt-1">新增照片</span>
-                    <span class="text-[9px] text-cream-muted font-bold">可選 ${3 - photos.length} 張</span>
+                    <span class="text-[9px] text-cream-muted font-bold">可選 ${MAX_TRAVEL_PHOTOS - photos.length} 張</span>
                     <input type="file" accept="image/*" multiple onchange="handleTravelPhotoFileUpload(event)" class="hidden">
                 </label>
             ` : '';
 
-            const addPhotoUrlBarHtml = photos.length < 3 ? `
+            photos.length < MAX_TRAVEL_PHOTOS ? `
                 <div class="flex gap-1.5 pt-1">
                     <input type="url" id="travel-photo-url-input" placeholder="🔗 或貼上雲端圖片網址新增..."
                            onkeydown="if(event.key==='Enter'){event.preventDefault(); addTravelPhotoByUrl();}"
@@ -3055,6 +3075,51 @@
                     </button>
                 </div>
             ` : '';
+
+            const currentNotes = typeof travel.notes === 'string' ? travel.notes : '';
+            const travelNotesCardHtml = `
+                <div class="bg-white cream-box p-4 space-y-2.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">📝 旅遊筆記與回憶</h3>
+                        <button type="button" onclick="toggleEditTravelNotes()"
+                                class="cream-btn bg-cream-secondary/40 hover:bg-cream-secondary px-2.5 py-1 text-[11px] font-extrabold text-cream-text">
+                            ${isEditingTravelNotes ? '✖️ 取消' : (currentNotes.trim() ? '✏️ 編輯筆記' : '✍️ 寫筆記')}
+                        </button>
+                    </div>
+                    ${isEditingTravelNotes ? `
+                        <form onsubmit="handleSaveTravelNotes(event)" class="space-y-2.5">
+                            <div class="flex items-center flex-wrap gap-1.5">
+                                <span class="text-[10px] font-bold text-cream-muted">快速插入標題：</span>
+                                <button type="button" onclick="insertTravelNoteHeading('🏨 飯店育兒備品')"
+                                        class="px-2.5 py-1 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-300 text-[11px] font-extrabold text-cream-text transition">
+                                    + 🏨 飯店育兒備品
+                                </button>
+                                <button type="button" onclick="insertTravelNoteHeading('✨ 寶寶可愛瞬間')"
+                                        class="px-2.5 py-1 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-300 text-[11px] font-extrabold text-cream-text transition">
+                                    + ✨ 寶寶可愛瞬間
+                                </button>
+                            </div>
+                            <textarea id="travel-notes-input" rows="5" maxlength="${MAX_TRAVEL_NOTE_LENGTH}"
+                                      oninput="updateTravelNoteCounter()"
+                                      placeholder="記錄飯店嬰兒床、推車動線，或寶寶在旅途中的可愛趣事..."
+                                      class="w-full p-3 text-xs sm:text-sm leading-relaxed rounded-xl border-2 border-cream-border focus:border-cream-primary focus:outline-none bg-cream-bg">${escapeHtml(currentNotes)}</textarea>
+                            <div class="flex items-center justify-between gap-2">
+                                <span id="travel-note-counter" class="text-[11px] font-bold text-cream-muted">${currentNotes.length} / ${MAX_TRAVEL_NOTE_LENGTH} 字</span>
+                                <button type="submit" class="cream-btn bg-cream-primary hover:bg-cream-primary/90 text-white px-4 py-1.5 text-xs font-extrabold">
+                                    💾 儲存筆記
+                                </button>
+                            </div>
+                        </form>
+                    ` : (currentNotes.trim() ? `
+                        <div class="bg-cream-bg/90 border border-dashed border-cream-border rounded-xl p-3 text-xs sm:text-sm text-cream-text leading-relaxed whitespace-pre-wrap break-words">${escapeHtml(currentNotes)}</div>
+                    ` : `
+                        <div onclick="toggleEditTravelNotes()"
+                             class="cursor-pointer bg-cream-bg/60 hover:bg-cream-secondary/20 border-2 border-dashed border-cream-border rounded-xl p-4 text-center text-xs text-cream-muted font-bold transition">
+                            ✍️ 還沒有旅遊筆記，點擊這裡記錄這趟旅行的點點滴滴吧！
+                        </div>
+                    `)}
+                </div>
+            `;
 
             const categoriesHtml = travel.checklist.map((cat, catIdx) => {
                 const catChecked = cat.items.filter(i => i.checked).length;
@@ -3165,12 +3230,12 @@
                         </div>
                     </div>
 
-                    <!-- 旅程紀念照片（最多 3 張） -->
+                    <!-- 旅程紀念照片 -->
                     <div class="bg-white cream-box p-4 space-y-2.5">
                         <div class="flex items-center justify-between">
                             <h3 class="text-xs sm:text-sm font-extrabold text-cream-text">📸 旅程紀念照片</h3>
                             <span class="text-[11px] font-bold text-cream-muted bg-cream-secondary/30 px-2.5 py-0.5 rounded-full">
-                                ${photos.length} / 3 張
+                                ${photos.length} / ${MAX_TRAVEL_PHOTOS} 張
                             </span>
                         </div>
                         <div class="grid grid-cols-3 gap-2.5">
@@ -3179,6 +3244,9 @@
                         </div>
                         ${addPhotoUrlBarHtml}
                     </div>
+
+                    <!-- 旅遊筆記與回憶 -->
+                    ${travelNotesCardHtml}
 
                     <!-- 分類準備清單 -->
                     <div class="space-y-3">
@@ -3198,13 +3266,13 @@
 
             const remain = 3 - travel.photos.length;
             if (remain <= 0) {
-                showToast('⚠️ 每筆旅行紀錄最多只能上傳 3 張照片喔！');
+                showToast('⚠️ 每筆旅行紀錄最多只能上傳 ${MAX_TRAVEL_PHOTOS} 張照片喔！');
                 return;
             }
 
             const selectedFiles = files.slice(0, remain);
             if (files.length > remain) {
-                showToast(`📸 每筆旅行最多 3 張照片，已自動選取前 ${remain} 張`);
+                showToast(`📸 每筆旅行最多 ${MAX_TRAVEL_PHOTOS} 張照片，已自動選取前 ${remain} 張`);
             } else {
                 showToast(`⏳ 正在處理 ${selectedFiles.length} 張旅程照片...`);
             }
@@ -3243,8 +3311,8 @@
             if (!travel || !input) return;
             if (!Array.isArray(travel.photos)) travel.photos = [];
 
-            if (travel.photos.length >= 3) {
-                showToast('⚠️ 每筆旅行紀錄最多只能放 3 張照片喔！');
+            if (travel.photos.length >= MAX_TRAVEL_PHOTOS) {
+                showToast(`⚠️ 每筆旅行紀錄最多只能放 ${MAX_TRAVEL_PHOTOS} 張照片喔！`);
                 return;
             }
 
@@ -3313,6 +3381,7 @@
                 endDate,
                 type,
                 photos: [],
+                notes: '',
                 checklist
             };
 
@@ -3320,14 +3389,16 @@
             saveState();
             showNewTravelForm = false;
             isEditingTravelMeta = false;
+            isEditingTravelNotes = false;
             activeTravelId = newTravel.id;
-            showToast('✈️ 已建立旅遊紀錄，可上傳最多 3 張紀念照並勾選清單！');
+            showToast('✈️ 已建立旅遊紀錄！');
             router.navigate('travel_detail');
         }
 
         function openTravelDetail(travelId) {
             activeTravelId = travelId;
             isEditingTravelMeta = false;
+            isEditingTravelNotes = false;
             router.navigate('travel_detail');
         }
 
@@ -3401,6 +3472,50 @@
             saveState();
             showToast('🗑️ 已刪除旅遊紀錄');
             renderView('travel');
+        }
+
+        function toggleEditTravelNotes() {
+            isEditingTravelNotes = !isEditingTravelNotes;
+            renderView('travel_detail');
+        }
+
+        function insertTravelNoteHeading(headingText) {
+            const textarea = document.getElementById('travel-notes-input');
+            if (!textarea) return;
+
+            const current = textarea.value;
+            const prefix = current.trim().length > 0 ? (current.endsWith('\n') ? '\n' : '\n\n') : '';
+            const block = `${prefix}【${headingText}】\n`;
+
+            if (current.length + block.length > MAX_TRAVEL_NOTE_LENGTH) {
+                showToast(`⚠️ 筆記字數已接近上限（${MAX_TRAVEL_NOTE_LENGTH} 字）`);
+                return;
+            }
+
+            textarea.value = current + block;
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            updateTravelNoteCounter();
+        }
+
+        function updateTravelNoteCounter() {
+            const textarea = document.getElementById('travel-notes-input');
+            const counter = document.getElementById('travel-note-counter');
+            if (!textarea || !counter) return;
+            counter.textContent = `${textarea.value.length} / ${MAX_TRAVEL_NOTE_LENGTH} 字`;
+        }
+
+        function handleSaveTravelNotes(event) {
+            event.preventDefault();
+            const travel = state.travels.find(t => t.id === activeTravelId);
+            const textarea = document.getElementById('travel-notes-input');
+            if (!travel || !textarea) return;
+
+            travel.notes = textarea.value.trim().slice(0, MAX_TRAVEL_NOTE_LENGTH);
+            isEditingTravelNotes = false;
+            saveState();
+            showToast('📝 旅遊筆記已儲存！');
+            renderView('travel_detail');
         }
     </script>
 </body>
