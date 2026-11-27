@@ -2701,6 +2701,8 @@
             const newDate = document.getElementById('edit-rec-date').value;
             const newAmount = document.getElementById('edit-rec-amount').value;
             const newReaction = document.getElementById('edit-rec-reaction').value;
+            const prefEl = document.getElementById('edit-rec-pref');
+            const newPref = prefEl ? prefEl.value : (item.history[historyIndex].preference || '');
             const newNotes = document.getElementById('edit-rec-notes').value;
 
             item.history[historyIndex] = {
