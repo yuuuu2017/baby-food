@@ -1931,6 +1931,11 @@
             document.getElementById('modal-container').classList.remove('hidden');
         }
 
+        // 合併官方圖鑑與自訂食材，統一回傳成一個陣列
+        function getAllIngredients(s = state) {
+            return [...Object.values(s.ingredients || {}), ...(s.customIngredients || [])];
+        }
+
         const CAT_LABEL_MAP = {
             farm: '🌾 農田區',
             orchard: '🍎 果樹區',
