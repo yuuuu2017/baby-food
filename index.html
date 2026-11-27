@@ -1256,6 +1256,10 @@
                     : item.seedEmoji;
                 let reactionBadge = `<span class="text-[10px] bg-gray-100 text-cream-text px-2 py-0.5 rounded-full font-bold">尚未嘗試</span>`;
                 let cardTint = '';
+                const latestPref = getLatestPreference(item.history);
+                const prefBadge = latestPref
+                    ? `<span class="text-[10px] border px-1.5 py-0.5 rounded-full font-bold ${PREF_META[latestPref].badge}">${PREF_META[latestPref].emoji} ${PREF_META[latestPref].label}</span>`
+                    : '';
 
                 if (triedCount > 0) {
                     const latest = item.history[triedCount - 1];
@@ -1284,6 +1288,7 @@
                                 <div class="flex items-center justify-center space-x-1.5 flex-wrap gap-y-1">
                                     <span class="text-xs text-cream-muted font-extrabold">${triedCount}/3</span>
                                     ${reactionBadge}
+                                    ${prefBadge}
                                 </div>
                             </div>
                         </div>
@@ -1299,6 +1304,7 @@
                                 <div class="flex items-center justify-center space-x-1.5 mt-1.5 flex-wrap gap-y-1">
                                     <span class="text-xs text-cream-muted font-extrabold">${triedCount}/3</span>
                                     ${reactionBadge}
+                                    ${prefBadge}
                                 </div>
                             </div>
                         </div>
@@ -1334,6 +1340,46 @@
             }
         }
 
+        // 寶寶喜好度對照表（非必填）
+        const PREF_META = {
+            like:    { emoji: '😍', label: '超愛', badge: 'bg-pink-100 text-pink-800 border-pink-300' },
+            normal:  { emoji: '😐', label: '普通', badge: 'bg-stone-100 text-stone-700 border-stone-300' },
+            dislike: { emoji: '😖', label: '拒吃', badge: 'bg-purple-100 text-purple-800 border-purple-300' }
+        };
+
+        // 產生 3 選 1 的喜好度點選按鈕列（radioName 用來區分不同表單）
+        function renderPrefRadioGroup(radioName) {
+            return `
+                <div class="grid grid-cols-3 gap-2">
+                    ${Object.entries(PREF_META).map(([key, m]) => `
+                        <label class="cursor-pointer">
+                            <input type="radio" name="${radioName}" value="${key}" class="peer hidden">
+                            <div class="text-center py-2 px-1 rounded-xl border-2 border-cream-border bg-white peer-checked:border-cream-primary peer-checked:bg-cream-yellow/70 peer-checked:scale-[1.02] text-xs font-extrabold text-cream-text transition">
+                                <span class="text-base mr-0.5">${m.emoji}</span>${m.label}
+                            </div>
+                        </label>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // 讀取目前勾選的喜好度（沒選就回傳空字串 ''）
+        function getSelectedPref(radioName) {
+            const checked = document.querySelector(`input[name="${radioName}"]:checked`);
+            return checked ? checked.value : '';
+        }
+
+        // 取得某樣食材「最近一次有評分」的喜好度
+        function getLatestPreference(history) {
+            if (!Array.isArray(history)) return '';
+            for (let i = history.length - 1; i >= 0; i--) {
+                if (history[i].preference && PREF_META[history[i].preference]) {
+                    return history[i].preference;
+                }
+            }
+            return '';
+        }
+
         function openIngredientDetail(itemId) {
             const item = state.ingredients[itemId] || state.customIngredients.find(i => i.id === itemId);
             if (!item) return;
@@ -1361,7 +1407,7 @@
                 if (record) {
                     challengeCirclesHtml += `
                         <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-dashed border-cream-primary bg-amber-50 flex flex-col items-center justify-center p-1 text-center shadow-inner rotate-[-3deg]">
-                            <span class="text-[10px] font-extrabold text-cream-primary">第 ${i + 1} 天打卡</span>
+                            <span class="text-[10px] font-extrabold text-cream-primary">第 ${i + 1} 天${record.preference && PREF_META[record.preference] ? ` ${PREF_META[record.preference].emoji}` : '打卡'}</span>
                             <span class="text-xs font-bold text-cream-text truncate max-w-[84px]">${escapeHtml(record.date)}</span>
                             <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold mt-0.5 ${getReactionBadgeClass(record.reaction)}">${getReactionText(record.reaction)}</span>
                         </div>
@@ -1442,8 +1488,12 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs font-bold mb-1">備註 (寶寶反應/心情)：</label>
-                                <textarea id="rec-notes" placeholder="記錄寶寶接受度..." class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-cream-bg" rows="2"></textarea>
+                                <label class="block text-xs font-bold mb-1">寶寶喜好度 (選填)：</label>
+                                ${renderPrefRadioGroup('rec-pref')}
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold mb-1">備註：</label>
+                                <textarea id="rec-notes" placeholder="記錄其他事項..." class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-cream-bg" rows="2"></textarea>
                             </div>
                             <button type="submit" class="w-full bg-cream-primary hover:bg-cream-primary/90 text-white font-extrabold py-3 cream-btn text-xs">
                                 ${submitBtnLabel}
@@ -1464,9 +1514,10 @@
             const date = document.getElementById('rec-date').value;
             const amount = document.getElementById('rec-amount').value;
             const reaction = document.getElementById('rec-reaction').value;
+            const preference = getSelectedPref('rec-pref');
             const notes = document.getElementById('rec-notes').value;
 
-            item.history.push({ date, amount, reaction, notes });
+            item.history.push({ date, amount, reaction, preference, notes });
             const newCount = item.history.length;
             saveState();
             closeModal();
@@ -1840,6 +1891,11 @@
                     </div>
 
                     <div>
+                        <label class="block text-xs font-bold mb-1">寶寶喜好度 (選填)：</label>
+                        ${renderPrefRadioGroup('quick-pref')}
+                    </div>
+
+                    <div>
                         <label class="block text-xs font-bold mb-1">備註</label>
                         <textarea id="quick-notes" rows="2" placeholder="記錄寶寶反應..." class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white"></textarea>
                     </div>
@@ -1909,9 +1965,10 @@
             const date = document.getElementById('quick-date').value;
             const amount = document.getElementById('quick-amount').value;
             const reaction = document.getElementById('quick-reaction').value;
+            const preference = getSelectedPref('quick-pref');
             const notes = document.getElementById('quick-notes').value;
 
-            item.history.push({ date, amount, reaction, notes });
+            item.history.push({ date, amount, reaction, preference, notes });
             const newCount = item.history.length;
             saveState();
 
@@ -1937,6 +1994,7 @@
                 document.getElementById('quick-amount').value = '';
                 document.getElementById('quick-reaction').value = 'none';
                 document.getElementById('quick-notes').value = '';
+                document.querySelectorAll('input[name="quick-pref"]').forEach(el => el.checked = false);
 
                 if (prevCount < 3 && newCount >= 3) {
                     openIngredientUnlockCardModal(item.id);
@@ -2399,6 +2457,10 @@
                         ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-2xl">🎴</span>`
                         : `<span class="text-2xl">🎴</span>`)
                     : item.seedEmoji;
+                
+                const latestPref = getLatestPreference(item.history);
+                const prefTag = latestPref ? ` ・ ${PREF_META[latestPref].emoji}${PREF_META[latestPref].label}` : '';
+
                 const cardClass = isUnlocked
                     ? "normal-box bg-emerald-50/70 border-emerald-500 hover:-translate-y-0.5"
                     : "cream-dashed-box bg-white";
@@ -2413,7 +2475,7 @@
                                 <h4 class="font-extrabold text-sm truncate text-cream-text">${escapeHtml(item.name)}</h4>
                                 ${item.isCustom ? '<span class="shrink-0 text-[9px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 rounded-full font-extrabold">自訂</span>' : ''}
                             </div>
-                            <p class="text-[10px] font-bold text-cream-muted">${isUnlocked ? '✨ 已解鎖' : `🌱 試吃中 (${triedCount}/3)`}</p>
+                            <p class="text-[10px] font-bold text-cream-muted">${isUnlocked ? '✨ 已解鎖' : `🌱 試吃中 (${triedCount}/3)`}${prefTag}</p>
                         </div>
                     </div>
                 `;
@@ -2517,7 +2579,7 @@
             }
 
             const allRecords = getAllRecords();
-            const rangeLabel = `${weekDays[0].label} - ${weekDays[6].label}`;
+            const rangeLabel = `${weekDays[0].dateStr.replace(/-/g, '/')} - ${weekDays[6].dateStr.replace(/-/g, '/')}`;
 
             return `
                 <div class="space-y-4 max-w-2xl mx-auto">
@@ -2526,13 +2588,19 @@
                     </div>
 
                     <div class="bg-white cream-box p-3 space-y-2.5">
-                        <div class="flex items-center justify-between">
-                            <button onclick="changeWeek(-1)" class="cream-btn bg-cream-bg px-3 py-1 text-xs font-extrabold">◀ </button>
+                        <div class="flex items-center justify-between gap-1">
+                            <button type="button" onclick="changeWeek(-1)" aria-label="上一週"
+                                class="p-1.5 text-lg leading-none bg-transparent border-0 hover:scale-110 active:scale-95 transition">
+                                ◀️
+                            </button>
                             <div class="text-center">
-                                <span class="font-extrabold text-sm text-cream-text">${rangeLabel}</span>
-                                ${weekOffset !== 0 ? `<button onclick="resetWeek()" class="ml-2 text-[10px] underline text-cream-primary font-bold">回本週</button>` : ''}
+                                <span class="font-extrabold text-xs sm:text-sm text-cream-text">${rangeLabel}</span>
+                                ${weekOffset !== 0 ? `<button type="button" onclick="resetWeek()" class="ml-1.5 text-[10px] underline text-cream-primary font-bold whitespace-nowrap">回本週</button>` : ''}
                             </div>
-                            <button onclick="changeWeek(1)" class="cream-btn bg-cream-bg px-3 py-1 text-xs font-extrabold"> ▶</button>
+                            <button type="button" onclick="changeWeek(1)" aria-label="下一週"
+                                class="p-1.5 text-lg leading-none bg-transparent border-0 hover:scale-110 active:scale-95 transition">
+                                ▶️
+                            </button>
                         </div>
 
                         <div class="flex justify-center pt-1 border-t border-dashed border-cream-border">
@@ -2552,31 +2620,43 @@
                     <div class="space-y-2.5">
                         ${weekDays.map(day => {
                             const dayRecords = allRecords.filter(r => r.date === day.dateStr);
+                            const isPastDay = day.dateStr < getLocalDateStr(today);
                             return `
-                                <div class="bg-white cream-box p-3.5 ${day.isToday ? 'ring-2 ring-cream-primary bg-cream-yellow/20' : ''}">
-                                        <div class="flex items-center space-x-2">
-                                            <span class="text-[11px] font-bold text-cream-muted">${dayRecords.length > 0 ? `共 ${dayRecords.length} 項` : '無紀錄'}</span>
+                                <div class="bg-white cream-box p-4 ${day.isToday ? 'ring-2 ring-cream-primary bg-cream-yellow/20' : ''}">
+                                    <!-- 上半部：日期靠左、統計與補記按鈕穩穩推到最右邊 -->
+                                    <div class="flex items-center justify-between gap-2 border-b border-dashed border-cream-border pb-2.5 mb-3">
+                                        <div class="flex items-center space-x-2 min-w-0">
+                                            <span class="font-extrabold text-sm text-cream-text whitespace-nowrap">${day.label}</span>
+                                            <span class="text-xs font-bold text-cream-muted whitespace-nowrap">${day.dayName}</span>
+                                            ${day.isToday ? `<span class="text-[10px] bg-cream-primary text-white px-2 py-0.5 rounded-full font-extrabold whitespace-nowrap">今天</span>` : ''}
+                                        </div>
+                                        <div class="flex items-center space-x-2 ml-auto shrink-0">
+                                            <span class="text-[11px] font-bold text-cream-muted whitespace-nowrap">${dayRecords.length > 0 ? `共 ${dayRecords.length} 項` : '無紀錄'}</span>
                                             <button type="button" onclick="openQuickAddModal('${day.dateStr}')"
-                                                class="bg-cream-secondary/50 hover:bg-cream-secondary border border-cream-text/60 text-cream-text text-[11px] font-extrabold px-2 py-0.5 rounded-lg transition active:scale-95">
-                                                ${day.dateStr < getLocalDateStr(today) ? '➕ 補記' : '➕ 記錄'}
+                                                class="bg-cream-secondary/50 hover:bg-cream-secondary border border-cream-text/60 text-cream-text text-[11px] font-extrabold px-2.5 py-1 rounded-lg whitespace-nowrap transition active:scale-95">
+                                                ${isPastDay ? '➕ 補記' : '➕ 記錄'}
                                             </button>
                                         </div>
+                                    </div>
 
-                                    ${dayRecords.length > 0 ? `
-                                        <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                                            ${dayRecords.map(r => {
-                                                let badgeClass = 'bg-emerald-600 text-white';
-                                                if (r.reaction === 'mild' || r.reaction === 'moderate') badgeClass = 'bg-amber-400 text-white';
-                                                if (r.reaction === 'severe') badgeClass = 'bg-red-600 text-white';
-                                                return `
-                                                    <button type="button" onclick="openHistoryManagerModal('${r.ingredientId}', ${r.historyIndex})" title="點擊編輯或刪除此筆紀錄"
-                                                        class="${badgeClass} text-xs font-extrabold px-2.5 py-1 rounded-xl shadow-sm hover:opacity-90 active:scale-95 transition text-left">
-                                                        ${escapeHtml(r.ingredientName)}${r.amount ? ` (${escapeHtml(r.amount)})` : ''}
-                                                    </button>
-                                                `;
-                                            }).join('')}
-                                        </div>
-                                    ` : `<p class="text-xs text-gray-400 italic">尚未記錄副食品</p>`}
+                                    <!-- 下半部：加高食材顯示區並拉開標籤間距，完全不與上方按鈕相撞 -->
+                                    <div class="min-h-[2.75rem] flex items-center">
+                                        ${dayRecords.length > 0 ? `
+                                            <div class="flex flex-wrap gap-2 w-full">
+                                                ${dayRecords.map(r => {
+                                                    let badgeClass = 'bg-emerald-600 text-white';
+                                                    if (r.reaction === 'mild' || r.reaction === 'moderate') badgeClass = 'bg-amber-400 text-white';
+                                                    if (r.reaction === 'severe') badgeClass = 'bg-red-600 text-white';
+                                                    return `
+                                                        <button type="button" onclick="openHistoryManagerModal('${r.ingredientId}', ${r.historyIndex})" title="點擊編輯或刪除此筆紀錄"
+                                                            class="${badgeClass} text-xs font-extrabold px-3 py-1.5 rounded-xl shadow-sm hover:opacity-90 active:scale-95 transition text-left">
+                                                            ${escapeHtml(r.ingredientName)}${r.amount ? ` (${escapeHtml(r.amount)})` : ''}
+                                                        </button>
+                                                    `;
+                                                }).join('')}
+                                            </div>
+                                        ` : `<p class="text-xs text-gray-400 italic">尚未記錄副食品</p>`}
+                                    </div>
                                 </div>
                             `;
                         }).join('')}
@@ -2627,6 +2707,7 @@
                 date: newDate,
                 amount: newAmount,
                 reaction: newReaction,
+                preference: newPref,
                 notes: newNotes
             };
 
@@ -2725,6 +2806,15 @@
                                             </select>
                                         </div>
                                         <div>
+                                            <label class="block text-[11px] font-bold mb-0.5">寶寶喜好度</label>
+                                            <select id="edit-rec-pref" class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
+                                                <option value="" ${!r.preference ? 'selected' : ''}>— 未評分 —</option>
+                                                <option value="like" ${r.preference === 'like' ? 'selected' : ''}>😍 超愛</option>
+                                                <option value="normal" ${r.preference === 'normal' ? 'selected' : ''}>😐 普通</option>
+                                                <option value="dislike" ${r.preference === 'dislike' ? 'selected' : ''}>😖 拒吃</option>
+                                            </select>
+                                        </div>
+                                        <div>
                                             <label class="block text-[11px] font-bold mb-0.5">備註</label>
                                             <input type="text" id="edit-rec-notes" value="${escapeHtml(r.notes || '')}" placeholder="觀察心得..." class="w-full p-1.5 border-2 border-cream-text rounded-xl text-xs bg-white">
                                         </div>
@@ -2747,6 +2837,8 @@
                                             <span class="font-extrabold text-sm text-cream-text">${escapeHtml(r.ingredientName)}</span>
                                             <span class="text-[10px] font-bold text-cream-muted bg-cream-bg px-2 py-0.5 rounded-full border border-cream-border">第 ${r.historyIndex + 1} 次</span>
                                             <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${badge.cls}">${badge.text}</span>
+                                            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${badge.cls}">${badge.text}</span>
+                                            ${r.preference && PREF_META[r.preference] ? `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${PREF_META[r.preference].badge}">${PREF_META[r.preference].emoji} ${PREF_META[r.preference].label}</span>` : ''}
                                         </div>
                                         <div class="text-xs text-cream-muted font-bold">
                                             📅 ${r.date}${r.amount ? ` ・ 🥣 ${escapeHtml(r.amount)}` : ''}
