@@ -1774,13 +1774,22 @@
         }
 
         // ==================== 7. 快速新增 & 自訂食材 Modal ====================
-        function openQuickAddModal() {
+        let quickAddSessionNames = [];
+        function openQuickAddModal(defaultDate = '') {
+            quickAddSessionNames = [];
+            const todayStr = getLocalDateStr();
+            const targetDate = defaultDate || todayStr;
+            const modalTitle = (defaultDate && defaultDate !== todayStr)
+                ? `⚡ 補記副食品 (${escapeHtml(defaultDate)})`
+                : '⚡ 快速新增今天吃了什麼';
+
             const modalContent = document.getElementById('modal-content');
             modalContent.innerHTML = `
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-base sm:text-lg font-extrabold">⚡ 快速新增今天吃了什麼</h3>
+                    <h3 class="text-base sm:text-lg font-extrabold">${modalTitle}</h3>
                     <button onclick="closeModal()" class="cream-btn px-3 py-1 bg-white text-xs font-bold">✕ 關閉</button>
                 </div>
+                <div id="quick-session-hint" class="hidden mb-3 px-3 py-2 rounded-xl bg-emerald-50 border-2 border-emerald-300 text-xs font-extrabold text-emerald-800"></div>
                 <form onsubmit="handleQuickAddSubmit(event)" class="space-y-3">
                     <div>
                         <label class="block text-xs font-bold mb-1">1. 選擇農場分類</label>
@@ -1812,7 +1821,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="min-w-0">
                             <label class="block text-xs font-bold mb-1">食用日期</label>
-                            <input type="date" id="quick-date" value="${getLocalDateStr()}" required class="block w-full min-w-0 max-w-full box-border p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
+                            <input type="date" id="quick-date" value="${escapeHtml(targetDate)}" required class="block w-full min-w-0 max-w-full box-border p-2 border-2 border-cream-text rounded-xl text-xs bg-white font-bold">
                         </div>
                         <div class="min-w-0">
                             <label class="block text-xs font-bold mb-1">份量 (非必填)</label>
@@ -1835,9 +1844,16 @@
                         <textarea id="quick-notes" rows="2" placeholder="記錄寶寶反應..." class="w-full p-2 border-2 border-cream-text rounded-xl text-xs bg-white"></textarea>
                     </div>
 
-                    <button type="submit" class="w-full bg-cream-primary text-white font-extrabold py-3 cream-btn text-sm">
-                        ✅ 儲存今日記錄
-                    </button>
+                    <div class="grid grid-cols-2 gap-2.5 pt-1">
+                        <button type="submit" onclick="this.form.dataset.mode='continue'"
+                            class="bg-cream-secondary hover:bg-cream-secondary/80 text-cream-text font-extrabold py-3 cream-btn text-xs sm:text-sm">
+                            ➕ 儲存並記錄下一樣
+                        </button>
+                        <button type="submit" onclick="this.form.dataset.mode='close'"
+                            class="bg-cream-primary hover:bg-cream-primary/90 text-white font-extrabold py-3 cream-btn text-xs sm:text-sm">
+                            ✅ 儲存並關閉
+                        </button>
+                    </div>
                 </form>
             `;
             document.getElementById('modal-container').classList.remove('hidden');
@@ -1881,6 +1897,10 @@
 
         function handleQuickAddSubmit(event) {
             event.preventDefault();
+            const form = event.target;
+            const mode = form.dataset.mode || 'close';
+            form.dataset.mode = 'close'; // 讀完立刻重置，確保按鍵盤 Enter 時預設為關閉
+
             const foodId = document.getElementById('quick-food').value;
             let item = state.ingredients[foodId] || state.customIngredients.find(i => i.id === foodId);
             if (!item) return;
@@ -1894,14 +1914,43 @@
             item.history.push({ date, amount, reaction, notes });
             const newCount = item.history.length;
             saveState();
-            closeModal();
 
-            if (prevCount < 3 && newCount >= 3) {
-                openIngredientUnlockCardModal(item.id);
-            } else {
-                showToast(`⚡ 已快速記錄：${item.name}！`);
-            }
+            // 背景先把主畫面更新好（例如週曆上立刻多出剛剛記的那樣食物）
             renderView(router.currentView, router.currentParams || {});
+
+            if (mode === 'continue') {
+                // 1. 更新彈窗頂端的「本次已記」清單
+                quickAddSessionNames.push(item.name);
+                const hintEl = document.getElementById('quick-session-hint');
+                if (hintEl) {
+                    hintEl.textContent = `✅ 本次已記 (${quickAddSessionNames.length})：${quickAddSessionNames.join('、')}`;
+                    hintEl.classList.remove('hidden');
+                }
+
+                // 2. 刷新食材選單的「已吃 X 次」，並保留原本選中位置方便接著選下一個
+                updateQuickFoodOptions();
+                const foodSelect = document.getElementById('quick-food');
+                if (foodSelect) foodSelect.value = foodId;
+                updateQuickAddCardBtn();
+
+                // 3. 只清空「份量、過敏反應、備註」，故意保留「農場分類」與「食用日期」
+                document.getElementById('quick-amount').value = '';
+                document.getElementById('quick-reaction').value = 'none';
+                document.getElementById('quick-notes').value = '';
+
+                if (prevCount < 3 && newCount >= 3) {
+                    openIngredientUnlockCardModal(item.id);
+                } else {
+                    showToast(`⚡ 已記下「${item.name}」，可繼續選下一樣！`);
+                }
+            } else {
+                closeModal();
+                if (prevCount < 3 && newCount >= 3) {
+                    openIngredientUnlockCardModal(item.id);
+                } else {
+                    showToast(`⚡ 已快速記錄：${item.name}！`);
+                }
+            }
         }
 
         function openCustomIngredientModal(defaultCat = 'farm') {
@@ -2505,14 +2554,13 @@
                             const dayRecords = allRecords.filter(r => r.date === day.dateStr);
                             return `
                                 <div class="bg-white cream-box p-3.5 ${day.isToday ? 'ring-2 ring-cream-primary bg-cream-yellow/20' : ''}">
-                                    <div class="flex items-center justify-between border-b border-dashed border-cream-border pb-1.5 mb-2">
                                         <div class="flex items-center space-x-2">
-                                            <span class="font-extrabold text-sm text-cream-text">${day.label}</span>
-                                            <span class="text-xs font-bold text-cream-muted">${day.dayName}</span>
-                                            ${day.isToday ? `<span class="text-[10px] bg-cream-primary text-white px-2 py-0.5 rounded-full font-extrabold">今天</span>` : ''}
+                                            <span class="text-[11px] font-bold text-cream-muted">${dayRecords.length > 0 ? `共 ${dayRecords.length} 項` : '無紀錄'}</span>
+                                            <button type="button" onclick="openQuickAddModal('${day.dateStr}')"
+                                                class="bg-cream-secondary/50 hover:bg-cream-secondary border border-cream-text/60 text-cream-text text-[11px] font-extrabold px-2 py-0.5 rounded-lg transition active:scale-95">
+                                                ${day.dateStr < getLocalDateStr(today) ? '➕ 補記' : '➕ 記錄'}
+                                            </button>
                                         </div>
-                                        <span class="text-[11px] font-bold text-cream-muted">${dayRecords.length > 0 ? `共 ${dayRecords.length} 項` : '無紀錄'}</span>
-                                    </div>
 
                                     ${dayRecords.length > 0 ? `
                                         <div class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
