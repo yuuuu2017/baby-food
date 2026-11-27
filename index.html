@@ -1276,8 +1276,8 @@
 
                 if (isUnlocked) {
                     html += `
-                        <div onclick="openIngredientDetail('${item.id}')" class="cream-dashed-box ${cardTint} p-3 cursor-pointer flex flex-col items-center text-center justify-between">
-                            <div class="p-1.5 bg-white rounded-2xl border-2 border-cream-text shadow-sm mb-2 flex items-center justify-center w-32 h-32 sm:w-36 sm:h-36 overflow-hidden">
+                        <div onclick="openIngredientDetail('${item.id}')" class="normal-box hover:-translate-y-0.5 ${cardTint} p-3 cursor-pointer flex flex-col items-center text-center justify-between">
+                            <div class="mb-2 flex items-center justify-center w-32 h-32 sm:w-36 sm:h-36 overflow-hidden">
                                 ${displayVisual}
                             </div>
                             <div class="w-full">
@@ -1291,7 +1291,7 @@
                 } else {
                     html += `
                         <div onclick="openIngredientDetail('${item.id}')" class="cream-dashed-box ${cardTint} p-3.5 cursor-pointer flex flex-col items-center text-center justify-between">
-                            <div class="text-3xl sm:text-4xl p-1.5 bg-white rounded-2xl border-2 border-cream-text shadow-sm mb-2 flex items-center justify-center w-14 h-14 overflow-hidden">
+                            <div class="text-3xl sm:text-4xl mb-2 flex items-center justify-center w-14 h-14 overflow-hidden">
                                 ${displayVisual}
                             </div>
                             <div class="w-full">
@@ -1351,7 +1351,7 @@
             const normalizedImgUrl = normalizeCloudImageUrl(item.imageUrl || '');
             const headerVisual = isUnlocked
                 ? (normalizedImgUrl
-                    ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-12 h-12 object-contain rounded-xl border border-cream-text bg-white p-0.5"><span style="display:none;" class="text-3xl">🎴</span>`
+                    ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.nameEn || item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-12 h-12 object-contain"><span style="display:none;" class="text-3xl">🎴</span>`
                     : `<span class="text-3xl">🎴</span>`)
                 : `<span class="text-3xl">${item.seedEmoji}</span>`;
 
@@ -2350,11 +2350,13 @@
                         ? `<img src="${normalizedImgUrl}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" class="w-full h-full object-contain"><span style="display:none;" class="text-2xl">🎴</span>`
                         : `<span class="text-2xl">🎴</span>`)
                     : item.seedEmoji;
-                let bgClass = isUnlocked ? "bg-emerald-50/70 border-emerald-500" : "bg-white border-cream-text";
+                const cardClass = isUnlocked
+                    ? "normal-box bg-emerald-50/70 border-emerald-500 hover:-translate-y-0.5"
+                    : "cream-dashed-box bg-white";
 
                 return `
-                    <div onclick="openIngredientDetail('${item.id}')" class="${bgClass} cream-box p-3 cursor-pointer flex items-center space-x-3 hover:scale-[1.01] transition">
-                        <div class="text-3xl p-1.5 bg-white rounded-2xl border-2 border-cream-text shadow-sm flex items-center justify-center w-12 h-12 shrink-0 overflow-hidden">
+                    <div onclick="openIngredientDetail('${item.id}')" class="${cardClass} p-3 cursor-pointer flex items-center space-x-3 transition">
+                        <div class="text-3xl flex items-center justify-center w-12 h-12 shrink-0 overflow-hidden">
                             ${displayVisual}
                         </div>
                         <div class="overflow-hidden flex-1 min-w-0">
@@ -3055,7 +3057,7 @@
                 `;
             }).join('');
 
-            photos.length < MAX_TRAVEL_PHOTOS ? `
+            const addPhotoSlotHtml = photos.length < MAX_TRAVEL_PHOTOS ? `
                 <label class="aspect-square rounded-xl border-2 border-dashed border-cream-primary bg-cream-bg hover:bg-cream-secondary/30 flex flex-col items-center justify-center cursor-pointer transition p-2 text-center">
                     <span class="text-2xl">📸</span>
                     <span class="text-[11px] font-extrabold text-cream-primary mt-1">新增照片</span>
@@ -3064,7 +3066,7 @@
                 </label>
             ` : '';
 
-            photos.length < MAX_TRAVEL_PHOTOS ? `
+            const addPhotoUrlBarHtml = photos.length < MAX_TRAVEL_PHOTOS ? `
                 <div class="flex gap-1.5 pt-1">
                     <input type="url" id="travel-photo-url-input" placeholder="🔗 或貼上雲端圖片網址新增..."
                            onkeydown="if(event.key==='Enter'){event.preventDefault(); addTravelPhotoByUrl();}"
